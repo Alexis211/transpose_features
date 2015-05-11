@@ -41,7 +41,7 @@ def construct_model(activation_function, hidden_dims, out_dim):
     return cost
 
 
-def train_model(cost, train_stream, valid_stream, load_location=None, save_location=None):
+def train_model(cost, train_stream, test_stream, load_location=None, save_location=None):
 
     # Define the model
     model = Model(cost)
@@ -60,8 +60,8 @@ def train_model(cost, train_stream, valid_stream, load_location=None, save_locat
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost], valid_stream,
-                                 prefix='valid_all', every_n_batches=1000),
+            DataStreamMonitoring([cost], test_stream,
+                                 prefix='test', every_n_batches=1000),
             Printing(every_n_batches=1000)
         ]
     )
@@ -82,8 +82,8 @@ if __name__ == "__main__":
 
     # TODO Prepare data
     train_stream = prepare_data("train")
-    valid_stream= prepare_data("valid")
+    test_stream = prepare_data("test")
 
     # Train the model
-    train_model(cost, train_stream, valid_stream,
+    train_model(cost, train_stream, test_stream
                 load_location=None, save_location=None)

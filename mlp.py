@@ -1,3 +1,4 @@
+import logging
 import numpy
 
 from blocks.algorithms import GradientDescent, Scale, StepRule
@@ -80,8 +81,8 @@ if __name__ == "__main__":
     cost = construct_model([Rectifier()], [100], 2)
 
     # TODO Prepare data
-    train_stream = prepare_data()
-    valid_stream= prepare_data()
+    train_stream = prepare_data("train")
+    valid_stream= prepare_data("valid")
 
     # Train the model
     train_model(cost, train_stream, valid_stream,

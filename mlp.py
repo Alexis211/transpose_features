@@ -11,8 +11,10 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
-from fuel.transformers import Batch
+from fuel.streams import DataStream
+from fuel.schemes import SequentialScheme
 from theano import tensor
+
 
 from datastream import prepare_data
 
@@ -22,12 +24,12 @@ logger = logging.getLogger(__name__)
 
 def construct_model(activation_function, hidden_dims, out_dim):
     # Construct the model
-    x = tensor.lmatrix('features')
-    y = tensor.lvector('targets')
+    x = tensor.fmatrix('features')
+    y = tensor.ivector('targets')
 
     mlp = MLP(activations=activation_function + [None],
-                 dims=[x.shape[1]] + hidden_dims +
-                 [out_dim])
+              dims=[39] + hidden_dims +
+              [out_dim])
 
     activations = mlp.apply(x)
 
@@ -41,8 +43,8 @@ def construct_model(activation_function, hidden_dims, out_dim):
     return cost
 
 
-def train_model(cost, train_stream, valid_stream, load_location=None, save_location=None):
-
+def train_model(cost, train_stream, test_stream, load_location=None, save_location=None):
+    cost.name = "Cross_entropy"
     # Define the model
     model = Model(cost)
 
@@ -52,7 +54,7 @@ def train_model(cost, train_stream, valid_stream, load_location=None, save_locat
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    step_rule = Scale(learning_rate=0.01)
+    step_rule = Scale(learning_rate=0.00001)
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
@@ -60,9 +62,11 @@ def train_model(cost, train_stream, valid_stream, load_location=None, save_locat
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost], valid_stream,
-                                 prefix='valid_all', every_n_batches=1000),
-            Printing(every_n_batches=1000)
+            DataStreamMonitoring([cost], test_stream,
+                                 prefix='test', every_n_epochs=10),
+            DataStreamMonitoring([cost], train_stream,
+                                 prefix='train', every_n_epochs=10),
+            Printing(every_n_epochs=10)
         ]
     )
     main_loop.run()
@@ -80,10 +84,13 @@ if __name__ == "__main__":
     # Build model
     cost = construct_model([Rectifier()], [100], 2)
 
-    # TODO Prepare data
-    train_stream = prepare_data("train")
-    valid_stream= prepare_data("valid")
-
+# TODO Prepare data
+    train_dataset = prepare_data("train")
+    test_dataset = prepare_data("test")
+    train_stream = DataStream(train_dataset, iteration_scheme=SequentialScheme(
+        train_dataset.num_examples, 200))
+    test_stream = DataStream(test_dataset, iteration_scheme=SequentialScheme(
+        test_dataset.num_examples, 1000))
     # Train the model
-    train_model(cost, train_stream, valid_stream,
+    train_model(cost, train_stream, test_stream,
                 load_location=None, save_location=None)

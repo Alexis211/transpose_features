@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 def construct_model(activation_function, input_dim, hidden_dims, out_dim):
     # Construct the model
     x = tensor.fmatrix('features')
-    y = tensor.ivector('targets')
+    y = tensor.imatrix('targets')
+    y = y[:,0]
 
     mlp = MLP(activations=activation_function + [None],
               dims=[input_dim] + hidden_dims +
@@ -43,7 +44,7 @@ def construct_model(activation_function, input_dim, hidden_dims, out_dim):
     return cost
 
 
-def train_model(cost, train_stream, test_stream, load_location=None, save_location=None):
+def train_model(cost, train_stream, load_location=None, save_location=None):
 
     cost.name = "Cross_entropy"
 
@@ -64,8 +65,6 @@ def train_model(cost, train_stream, test_stream, load_location=None, save_locati
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost], test_stream,
-                                 prefix='test', after_epoch=False, every_n_epochs=10),
             DataStreamMonitoring([cost], train_stream,
                                  prefix='train', after_epoch=False, every_n_epochs=10),
             Printing(after_epoch=False, every_n_epochs=10)
@@ -82,18 +81,14 @@ def train_model(cost, train_stream, test_stream, load_location=None, save_locati
 
 
 if __name__ == "__main__":
+    feat = 7129
+    train_ex = 38
 
     # Build model
-    cost = construct_model([Rectifier()], 39, [30], 2)
+    cost = construct_model([Rectifier()], train_ex + 1, [30], 2)
 
     # Build datastream
-    train_dataset = prepare_data("train")
-    test_dataset = prepare_data("test")
-    train_stream = DataStream(train_dataset, iteration_scheme=ShuffledScheme(
-        train_dataset.num_examples, 200))
-    test_stream = DataStream(test_dataset, iteration_scheme=ShuffledScheme(
-        test_dataset.num_examples, 1000))
+    train_stream = prepare_data("train")
 
     # Train the model
-    train_model(cost, train_stream, test_stream,
-                load_location=None, save_location=None)
+    train_model(cost, train_stream, load_location=None, save_location=None)

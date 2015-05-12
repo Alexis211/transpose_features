@@ -54,7 +54,7 @@ def build_dataset():
             new_dataset[0][i * (38 + 34) + j, :] = new_sample
             new_dataset[1][i * (38 + 34) + j] = new_target
 
-    f = h5py.File('leukemia_data.hdf5', mode='w')
+    f = h5py.File('leukemia_all.hdf5', mode='w')
     x = f.create_dataset('features', (7129 * (38 + 34), 39), dtype="float32")
     target = f.create_dataset('targets', (7129 * (38 + 34),), dtype='int32')
 

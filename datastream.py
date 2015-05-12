@@ -4,6 +4,8 @@ import numpy
 from fuel import config
 
 from fuel.datasets.hdf5 import H5PYDataset
+from fuel.streams import DataStream
+from fuel.schemes import SequentialScheme
 
 
 logging.basicConfig(level='INFO')
@@ -21,5 +23,7 @@ def prepare_data(which_set):
 
 if __name__ == "__main__":
         # Test
-    data_set = prepare_data("train")
-    print data_set
+    dataset = prepare_data("train")
+    stream = DataStream(dataset, iteration_scheme=SequentialScheme(
+        dataset.num_examples, 1))
+    print next(stream.get_epoch_iterator())

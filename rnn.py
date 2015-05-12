@@ -2,7 +2,8 @@ import logging
 import numpy
 
 from blocks.algorithms import GradientDescent, Scale, StepRule
-from blocks.bricks import Rectifier, MLP, Softmax
+from blocks.bricks import Tanh, Softmax, Linear
+from blocks.bricks.recurrent import SimpleRecurrent
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
@@ -12,7 +13,7 @@ from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
 from fuel.streams import DataStream
-from fuel.schemes import ShuffledScheme
+from fuel.schemes import SequentialScheme
 from theano import tensor
 
 
@@ -22,23 +23,32 @@ logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 
-def construct_model(activation_function, input_dim, hidden_dims, out_dim):
+def construct_model(activation_function, input_dim, hidden_dim, out_dim):
     # Construct the model
     x = tensor.fmatrix('features')
     y = tensor.ivector('targets')
 
-    mlp = MLP(activations=activation_function + [None],
-              dims=[input_dim] + hidden_dims +
-              [out_dim])
+    # Give x as Time X Batch X Features
+    x = tensor.reshape(x, (x.shape[0], 1, x.shape[1]))
 
-    activations = mlp.apply(x)
+    linear = Linear(
+        input_dim=input_dim, output_dim=hidden_dim, name="input_linear")
+    rnn = SimpleRecurrent(
+        dim=hidden_dim, activation=activation_function, name="hidden_recurrent")
+    linear2 = Linear(
+        input_dim=hidden_dim, output_dim=out_dim, name="out_linear")
 
-    cost = Softmax().categorical_cross_entropy(y, activations)
+    pre_rnn = linear.apply(x)
+    activations = linear2.apply(rnn.apply(pre_rnn)[-1])
+
+    cost = Softmax().categorical_cross_entropy(y[0:1], activations)
 
     # Initialize parameters
-    mlp.weights_init = IsotropicGaussian(0.01)
-    mlp.biases_init = Constant(0.001)
-    mlp.initialize()
+
+    for brick in (linear, rnn, linear2):
+        brick.weights_init = IsotropicGaussian(0.01)
+        brick.biases_init = Constant(0.)
+        brick.initialize()
 
     return cost
 
@@ -84,15 +94,15 @@ def train_model(cost, train_stream, test_stream, load_location=None, save_locati
 if __name__ == "__main__":
 
     # Build model
-    cost = construct_model([Rectifier()], 39, [30], 2)
+    cost = construct_model(Tanh(), 39, 30, 2)
 
     # Build datastream
     train_dataset = prepare_data("train")
     test_dataset = prepare_data("test")
-    train_stream = DataStream(train_dataset, iteration_scheme=ShuffledScheme(
-        train_dataset.num_examples, 200))
-    test_stream = DataStream(test_dataset, iteration_scheme=ShuffledScheme(
-        test_dataset.num_examples, 1000))
+    train_stream = DataStream(train_dataset, iteration_scheme=SequentialScheme(
+        train_dataset.num_examples, 1729))
+    test_stream = DataStream(test_dataset, iteration_scheme=SequentialScheme(
+        test_dataset.num_examples, 1729))
 
     # Train the model
     train_model(cost, train_stream, test_stream,

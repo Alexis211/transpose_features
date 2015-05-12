@@ -46,8 +46,8 @@ def build_dataset():
     new_dataset = [
         numpy.zeros((7129 * (38 + 34), 39)), numpy.zeros((7129 * (38 + 34)))]
 
-    for i in range(7129):
-        for j in range(38 + 34):
+    for j in range(38 + 34):
+        for i in range(7129):
             new_sample = numpy.concatenate(
                 (features[i, :], big[j, i:i + 1]), axis=1)
             new_target = big[j, -1]

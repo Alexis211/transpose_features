@@ -44,7 +44,9 @@ def construct_model(activation_function, hidden_dims, out_dim):
 
 
 def train_model(cost, train_stream, test_stream, load_location=None, save_location=None):
+
     cost.name = "Cross_entropy"
+
     # Define the model
     model = Model(cost)
 
@@ -84,13 +86,14 @@ if __name__ == "__main__":
     # Build model
     cost = construct_model([Rectifier()], [100], 2)
 
-# TODO Prepare data
+    # Build datastream
     train_dataset = prepare_data("train")
     test_dataset = prepare_data("test")
     train_stream = DataStream(train_dataset, iteration_scheme=SequentialScheme(
         train_dataset.num_examples, 200))
     test_stream = DataStream(test_dataset, iteration_scheme=SequentialScheme(
         test_dataset.num_examples, 1000))
+
     # Train the model
     train_model(cost, train_stream, test_stream,
                 load_location=None, save_location=None)

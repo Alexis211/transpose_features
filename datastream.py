@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 def prepare_data(which_set):
     # Construct data stream
     logger.info('Building data stream...')
+
     dataset = H5PYDataset(os.path.join(
         config.data_path, 'Leukemia/leukemia_data.hdf5'), which_set=which_set, load_in_memory=True)
     return dataset

@@ -16,25 +16,45 @@ from fuel.schemes import ShuffledScheme
 from theano import tensor
 
 
-from datastream import prepare_data
+import datastream
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 
-def construct_model(activation_function, input_dim, hidden_dims, out_dim):
+def construct_model(activation_function, input_dim, hidden_dims, output_dim):
     # Construct the model
-    x = tensor.fmatrix('features')
-    y = tensor.imatrix('targets')
-    y = y[:,0]
+    r = tensor.fmatrix('r')
+    x = tensor.fmatrix('x')
+    y = tensor.ivector('y')
 
+    nx = x.shape[0]
+    nj = x.shape[1]  # also is r.shape[0]
+    nr = r.shape[1]
+
+    # r is nj x nr
+    # x is nx x nj
+    # y is nx x 1
+
+    # r_rep is nx x nj x nr
+    r_rep = r[None, :, :].repeat(axis=0, repeats=nx)
+    # x3 is nx x nj x 1
+    x3 = x[:, :, None]
+
+    # concat is nx x nj x (nr + 1)
+    concat = tensor.concatenate([r_rep, x3], axis=2)
+    mlp_input = concat.reshape((nx * nj, nr + 1))
+
+    # input_dim must be nr+1
     mlp = MLP(activations=activation_function + [None],
-              dims=[input_dim] + hidden_dims +
-              [out_dim])
+              dims=[input_dim] + hidden_dims + [output_dim])
 
-    activations = mlp.apply(x)
+    activations = mlp.apply(mlp_input)
 
-    cost = Softmax().categorical_cross_entropy(y, activations)
+    act_sh = activations.reshape((nx, nj, output_dim))
+    final = act_sh.mean(axis=1)
+
+    cost = Softmax().categorical_cross_entropy(y, final)
 
     # Initialize parameters
     mlp.weights_init = IsotropicGaussian(0.01)
@@ -81,14 +101,13 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
 
 
 if __name__ == "__main__":
-    feat = 7129
-    train_ex = 38
+    train_ex = 100
 
     # Build model
     cost = construct_model([Rectifier()], train_ex + 1, [30], 2)
 
     # Build datastream
-    train_stream = prepare_data("train")
+    train_stream = datastream.prepare_data("ARCENE", "train", datastream.RandomTransposeIt(10, True, 100, True))
 
     # Train the model
     train_model(cost, train_stream, load_location=None, save_location=None)

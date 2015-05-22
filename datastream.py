@@ -2,39 +2,93 @@ import os
 import logging
 import numpy
 from fuel import config
+import random
 
-from fuel.datasets.hdf5 import H5PYDataset
+from picklable_itertools import iter_
+
+from fuel.datasets import Dataset
 from fuel.streams import DataStream
-from fuel.schemes import ShuffledScheme
-from fuel.transformers import Mapping
+from fuel.schemes import IterationScheme
 
+import dataset
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
+def batch(items, batch_size):
+    return [items[i: min(i + batch_size, len(items))] for i in xrange(0, len(items), batch_size)]
 
-def _concat(sample):
-    feat = sample[0]
-    target = sample[1]
-    new_feat = numpy.dot(numpy.ones((feat.shape[1], 1)), feat)
-    new_feat = numpy.concatenate((new_feat, feat.T), axis=1).astype(numpy.float32)
-    return (new_feat, target.T)
+class NPYTransposeDataset(Dataset):
+    def __init__(self, ref_data, data, **kwargs):
+        self.ref_data_x, self.ref_data_y = ref_data
+        self.data_x, self.data_y = data
+
+        self.nitems, self.nfeats = self.data_x.shape
+
+        self.provides_sources = ('r', 'x', 'y')
+
+        super(NPYTransposeDataset, self).__init__(**kwargs)
+
+    def get_data(self, state=None, request=None):
+        if request == None:
+            raise ValueError("Expected request: i vector and j vector")
+        i_list, j_list = request
+        return self.ref_data_x[:, j_list].T, self.data_x[i_list, :][:, j_list], self.data_y[i_list]
+
+class TransposeIt(IterationScheme):
+    def set_dims(self, nitems, nfeats):
+        self.nitems = nitems
+        self.nfeats = nfeats
+
+class RandomTransposeIt(TransposeIt):
+    def __init__(self, ibatchsize, irandom, jbatchsize, jrandom):
+        self.ibatchsize = ibatchsize
+        self.jbatchsize = jbatchsize
+
+        self.irandom = irandom
+        self.jrandom = jrandom
+
+    def get_request_iterator(self):
+        i = range(self.nitems)
+        j = range(self.nfeats)
+
+        if self.irandom:
+            random.shuffle(i)
+        if self.jrandom:
+            random.shuffle(j)
+
+        ib = batch(i, self.ibatchsize)
+        jb = batch(j, self.jbatchsize)
+
+        return iter_([(ii, jj) for ii in ib for jj in jb])
 
 
-def prepare_data(which_set):
-    # Construct data stream
-    logger.info('Building data stream...')
+def prepare_data(name, part, iteration_scheme):
+    if name == 'ARCENE':
+        train_set_x, train_set_y, valid_set_x, valid_set_y = dataset.load_ARCENE()
+    elif name == 'AMLALL':
+        train_set_x, train_set_y, valid_set_x, valid_set_y = dataset.load_AMLALL()
+    else:
+        raise ValueError("No such dataset " + name)
 
-    dataset = H5PYDataset(os.path.join(
-        config.data_path, 'Leukemia/leukemia_transpose.hdf5'), which_set=which_set, load_in_memory=True)
-    stream = DataStream(dataset, iteration_scheme=ShuffledScheme(
-        dataset.num_examples, 1))
-    stream = Mapping(stream, _concat)
+    train_set = (train_set_x, train_set_y)
+    valid_set = (valid_set_x, valid_set_y)
+
+    if part == "train":
+        data = NPYTransposeDataset(train_set, train_set)
+    elif part == "valid":
+        data = NPYTransposeDataset(train_set, valid_set)
+    else:
+        raise ValueError("No such part " + part)
+
+    iteration_scheme.set_dims(data.nitems, data.nfeats)
+
+    stream = DataStream(data, iteration_scheme=iteration_scheme)
 
     return stream
 
 
 if __name__ == "__main__":
-        # Test
-    stream = prepare_data("train")
+    # Test
+    stream = prepare_data("ARCENE", "train", RandomTransposeIt(10, True, 100, True))
     print next(stream.get_epoch_iterator())

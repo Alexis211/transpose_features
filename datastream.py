@@ -1,6 +1,8 @@
 import logging
 import random
 
+import cPickle
+
 from picklable_itertools import iter_
 
 from fuel.datasets import Dataset
@@ -68,6 +70,30 @@ class RandomTransposeIt(TransposeIt):
         jb = batch(j, self.jbatchsize)
 
         return iter_([(ii, jj) for ii in ib for jj in jb])
+
+class LogregOrderTransposeIt(TransposeIt):
+
+    def __init__(self, ibatchsize, irandom, jlogregparamfile, jcount):
+        self.ibatchsize = ibatchsize
+        self.irandom = irandom
+
+        with open(jlogregparamfile) as f:
+            w = cPickle.load(f)
+
+        jsort = (-(w**2)).flatten().argsort(axis=0)
+        js = jsort[:jcount]
+        self.js = list(js)
+        random.shuffle(self.js)
+
+    def get_request_iterator(self):
+        i = range(self.nitems)
+
+        if self.irandom:
+            random.shuffle(i)
+
+        ib = batch(i, self.ibatchsize)
+
+        return iter_([(ii, self.js) for ii in ib])
 
 
 def prepare_data(name, part, iteration_scheme):

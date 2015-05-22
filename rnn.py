@@ -1,13 +1,13 @@
 import logging
 import numpy as np
 
-from blocks.algorithms import GradientDescent, Momentum
+from blocks.algorithms import GradientDescent, Momentum, AdaDelta
 from blocks.bricks import Tanh, Softmax, Linear
 from blocks.bricks.recurrent import LSTM
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
-from blocks.extensions.monitoring import DataStreamMonitoring
+from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
 from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
@@ -20,7 +20,7 @@ logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 
-def construct_model(activation_function, input_dim, hidden_dim, out_dim):
+def construct_model_rnn(activation_function, input_dim, hidden_dim, out_dim):
     # Construct the model
     r = tensor.fmatrix('r')
     x = tensor.fmatrix('x')
@@ -72,10 +72,10 @@ def construct_model(activation_function, input_dim, hidden_dim, out_dim):
     return cost, error_rate
 
 
-def train_model(cost, error_rate, train_stream, load_location=None, save_location=None):
+def train_model(cost, error_rate, train_stream, valid_stream, load_location=None, save_location=None):
 
-    cost.name = "Cross_entropy"
-    error_rate.name = 'Error_rate'
+    cost.name = "cross_entropy"
+    error_rate.name = 'error_rate'
 
     # Define the model
     model = Model(cost)
@@ -86,7 +86,8 @@ def train_model(cost, error_rate, train_stream, load_location=None, save_locatio
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    step_rule = Momentum(learning_rate=0.01, momentum=0.9)
+    # step_rule = Momentum(learning_rate=0.1, momentum=0.9)
+    step_rule = AdaDelta()
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
@@ -94,11 +95,10 @@ def train_model(cost, error_rate, train_stream, load_location=None, save_locatio
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            # DataStreamMonitoring([cost], test_stream, prefix='test',
-            #                      after_epoch=False, every_n_epochs=10),
-            DataStreamMonitoring([cost], train_stream, prefix='train',
-                                 after_epoch=True),
-            Printing(after_epoch=True)
+            TrainingDataMonitoring([cost, error_rate], prefix='train', every_n_epochs=1),
+            DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
+                                 after_epoch=False, every_n_epochs=10),
+            Printing(every_n_epochs=1, after_epoch=False)
         ]
     )
     main_loop.run()
@@ -115,11 +115,12 @@ if __name__ == "__main__":
     train_ex = 100
 
     # Build model
-    cost, error_rate = construct_model(Tanh(), train_ex + 1, 30, 2)
+    cost, error_rate = construct_model_rnn(Tanh(), train_ex + 1, 30, 2)
 
     # Build datastream
-    train_stream = prepare_data("ARCENE", "train",
-                                LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500))
+    iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
+    train_stream = prepare_data("ARCENE", "train", iter_scheme)
+    valid_stream = prepare_data("ARCENE", "valid", iter_scheme)
 
     # Train the model
-    train_model(cost, error_rate, train_stream, load_location=None, save_location=None)
+    train_model(cost, error_rate, train_stream, valid_stream, load_location=None, save_location=None)

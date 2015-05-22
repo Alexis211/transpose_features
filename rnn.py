@@ -82,7 +82,7 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    step_rule = Momentum(learning_rate=0.1, momentum=0.9)
+    step_rule = Momentum(learning_rate=0.01, momentum=0.9)
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
@@ -93,8 +93,8 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
             # DataStreamMonitoring([cost], test_stream, prefix='test',
             #                      after_epoch=False, every_n_epochs=10),
             DataStreamMonitoring([cost], train_stream, prefix='train',
-                                 after_epoch=False, every_n_epochs=10),
-            Printing(after_epoch=False, every_n_epochs=10)
+                                 after_epoch=True),
+            Printing(after_epoch=True)
         ]
     )
     main_loop.run()

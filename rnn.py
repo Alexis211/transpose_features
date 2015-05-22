@@ -14,7 +14,7 @@ from blocks.main_loop import MainLoop
 from blocks.model import Model
 from theano import tensor
 
-from datastream import prepare_data, RandomTransposeIt
+from datastream import prepare_data, RandomTransposeIt, LogregOrderTransposeIt
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     # Build datastream
     train_stream = prepare_data("ARCENE", "train",
-                                RandomTransposeIt(10, True, 100, True))
+                                LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500))
 
     # Train the model
     train_model(cost, error_rate, train_stream, load_location=None, save_location=None)

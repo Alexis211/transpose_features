@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 
-from blocks.algorithms import GradientDescent, Scale
+from blocks.algorithms import GradientDescent, Momentum
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
@@ -13,8 +13,7 @@ from blocks.main_loop import MainLoop
 from blocks.model import Model
 from theano import tensor
 
-
-import datastream
+from datastream import prepare_data, RandomTransposeIt
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -75,7 +74,7 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    step_rule = Scale(learning_rate=0.00001)
+    step_rule = Momentum(learning_rate=0.1, momentum=0.9)
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
@@ -106,11 +105,8 @@ if __name__ == "__main__":
     cost = construct_model([Rectifier()], train_ex + 1, [30], 2)
 
     # Build datastream
-    train_stream = datastream.prepare_data("ARCENE", "train",
-                                           datastream.RandomTransposeIt(10,
-                                                                        True,
-                                                                        100,
-                                                                        True))
+    train_stream = prepare_data("ARCENE", "train",
+                                RandomTransposeIt(10, True, 100, True))
 
     # Train the model
     train_model(cost, train_stream, load_location=None, save_location=None)

@@ -1,9 +1,9 @@
 import logging
 import numpy as np
 
-from blocks.algorithms import GradientDescent, Scale
+from blocks.algorithms import GradientDescent, Momentum
 from blocks.bricks import Tanh, Softmax, Linear
-from blocks.bricks.recurrent import SimpleRecurrent
+from blocks.bricks.recurrent import LSTM
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
@@ -12,12 +12,9 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
-from fuel.streams import DataStream
-from fuel.schemes import SequentialScheme
 from theano import tensor
 
-
-from datastream import prepare_data
+from datastream import prepare_data, RandomTransposeIt
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -25,27 +22,46 @@ logger = logging.getLogger(__name__)
 
 def construct_model(activation_function, input_dim, hidden_dim, out_dim):
     # Construct the model
-    x = tensor.fmatrix('features')
-    y = tensor.ivector('targets')
+    r = tensor.fmatrix('r')
+    x = tensor.fmatrix('x')
+    y = tensor.ivector('y')
 
-    # Give x as Time X Batch X Features
-    x = tensor.reshape(x, (x.shape[0], 1, x.shape[1]))
+    nx = x.shape[0]
+    nj = x.shape[1]  # also is r.shape[0]
+    nr = r.shape[1]
 
-    linear = Linear(
-        input_dim=input_dim, output_dim=hidden_dim, name="input_linear")
-    rnn = SimpleRecurrent(
-        dim=hidden_dim, activation=activation_function, name="hidden_recurrent")
-    linear2 = Linear(
-        input_dim=hidden_dim, output_dim=out_dim, name="out_linear")
+    # r is nj x nr
+    # x is nx x nj
+    # y is nx
 
-    pre_rnn = linear.apply(x)
-    activations = linear2.apply(rnn.apply(pre_rnn)[-1])
+    # r_rep is nx x nj x nr
+    r_rep = r[None, :, :].repeat(axis=0, repeats=nx)
+    # x3 is nx x nj x 1
+    x3 = x[:, :, None]
 
-    cost = Softmax().categorical_cross_entropy(y[0:1], activations)
+    # concat is nx x nj x (nr + 1)
+    concat = tensor.concatenate([r_rep, x3], axis=2)
+
+    # Change concat from Batch x Time x Features to T X B x F
+    rnn_input = concat.dimshuffle(1, 0, 2)
+
+    linear = Linear(input_dim=input_dim, output_dim=4 * hidden_dim,
+                    name="input_linear")
+    lstm = LSTM(dim=hidden_dim, activation=activation_function,
+                name="hidden_recurrent")
+    top_linear = Linear(input_dim=hidden_dim, output_dim=out_dim,
+                        name="out_linear")
+
+    pre_rnn = linear.apply(rnn_input)
+    states = lstm.apply(pre_rnn)[0]
+    activations = top_linear.apply(states)
+    activations = tensor.mean(activations, axis=0)
+
+    cost = Softmax().categorical_cross_entropy(y, activations)
 
     # Initialize parameters
 
-    for brick in (linear, rnn, linear2):
+    for brick in (linear, lstm, top_linear):
         brick.weights_init = IsotropicGaussian(0.01)
         brick.biases_init = Constant(0.)
         brick.initialize()
@@ -53,8 +69,7 @@ def construct_model(activation_function, input_dim, hidden_dim, out_dim):
     return cost
 
 
-def train_model(cost, train_stream, test_stream,
-                load_location=None, save_location=None):
+def train_model(cost, train_stream, load_location=None, save_location=None):
 
     cost.name = "Cross_entropy"
 
@@ -67,7 +82,7 @@ def train_model(cost, train_stream, test_stream,
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    step_rule = Scale(learning_rate=0.00001)
+    step_rule = Momentum(learning_rate=0.1, momentum=0.9)
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
@@ -75,8 +90,8 @@ def train_model(cost, train_stream, test_stream,
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost], test_stream, prefix='test',
-                                 after_epoch=False, every_n_epochs=10),
+            # DataStreamMonitoring([cost], test_stream, prefix='test',
+            #                      after_epoch=False, every_n_epochs=10),
             DataStreamMonitoring([cost], train_stream, prefix='train',
                                  after_epoch=False, every_n_epochs=10),
             Printing(after_epoch=False, every_n_epochs=10)
@@ -93,18 +108,14 @@ def train_model(cost, train_stream, test_stream,
 
 
 if __name__ == "__main__":
+    train_ex = 100
 
     # Build model
-    cost = construct_model(Tanh(), 39, 30, 2)
+    cost = construct_model(Tanh(), train_ex + 1, 30, 2)
 
     # Build datastream
-    train_dataset = prepare_data("train")
-    test_dataset = prepare_data("test")
-    train_stream = DataStream(train_dataset, iteration_scheme=SequentialScheme(
-        train_dataset.num_examples, 1729))
-    test_stream = DataStream(test_dataset, iteration_scheme=SequentialScheme(
-        test_dataset.num_examples, 1729))
+    train_stream = prepare_data("ARCENE", "train",
+                                RandomTransposeIt(10, True, 100, True))
 
     # Train the model
-    train_model(cost, train_stream, test_stream,
-                load_location=None, save_location=None)
+    train_model(cost, train_stream, load_location=None, save_location=None)

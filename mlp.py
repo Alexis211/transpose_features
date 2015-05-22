@@ -1,11 +1,7 @@
 import logging
 import numpy as np
 
-<<<<<<< HEAD
-from blocks.algorithms import GradientDescent, Momentum
-=======
 from blocks.algorithms import GradientDescent, Momentum, StepRule
->>>>>>> Change learning rate
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
@@ -57,17 +53,21 @@ def construct_model(activation_function, input_dim, hidden_dims, output_dim):
 
     cost = Softmax().categorical_cross_entropy(y, final)
 
+    pred = final.argmax(axis=1)
+    error_rate = tensor.neq(y, pred).mean()
+
     # Initialize parameters
     mlp.weights_init = IsotropicGaussian(0.01)
     mlp.biases_init = Constant(0.001)
     mlp.initialize()
 
-    return cost
+    return cost, error_rate
 
 
-def train_model(cost, train_stream, load_location=None, save_location=None):
+def train_model(cost, error_rate, train_stream, load_location=None, save_location=None):
 
     cost.name = "Cross_entropy"
+    error_rate.name = 'Error_rate'
 
     # Define the model
     model = Model(cost)
@@ -86,7 +86,7 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost], train_stream,
+            DataStreamMonitoring([cost, error_rate], train_stream,
                                  prefix='train', after_epoch=False,
                                  every_n_epochs=10),
             Printing(after_epoch=False, every_n_epochs=10)
@@ -106,11 +106,11 @@ if __name__ == "__main__":
     train_ex = 100
 
     # Build model
-    cost = construct_model([Rectifier()], train_ex + 1, [30], 2)
+    cost, error_rate = construct_model([Rectifier()], train_ex + 1, [30], 2)
 
     # Build datastream
     train_stream = prepare_data("ARCENE", "train",
                                 RandomTransposeIt(10, True, 100, True))
 
     # Train the model
-    train_model(cost, train_stream, load_location=None, save_location=None)
+    train_model(cost, error_rate, train_stream, load_location=None, save_location=None)

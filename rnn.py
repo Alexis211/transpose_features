@@ -59,6 +59,9 @@ def construct_model(activation_function, input_dim, hidden_dim, out_dim):
 
     cost = Softmax().categorical_cross_entropy(y, activations)
 
+    pred = activations.argmax(axis=1)
+    error_rate = tensor.neq(y, pred).mean()
+
     # Initialize parameters
 
     for brick in (linear, lstm, top_linear):
@@ -66,12 +69,13 @@ def construct_model(activation_function, input_dim, hidden_dim, out_dim):
         brick.biases_init = Constant(0.)
         brick.initialize()
 
-    return cost
+    return cost, error_rate
 
 
-def train_model(cost, train_stream, load_location=None, save_location=None):
+def train_model(cost, error_rate, train_stream, load_location=None, save_location=None):
 
     cost.name = "Cross_entropy"
+    error_rate.name = 'Error_rate'
 
     # Define the model
     model = Model(cost)
@@ -92,7 +96,7 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
         extensions=[
             # DataStreamMonitoring([cost], test_stream, prefix='test',
             #                      after_epoch=False, every_n_epochs=10),
-            DataStreamMonitoring([cost], train_stream, prefix='train',
+            DataStreamMonitoring([cost, error_rate], train_stream, prefix='train',
                                  after_epoch=False, every_n_epochs=10),
             Printing(after_epoch=False, every_n_epochs=10)
         ]
@@ -111,11 +115,11 @@ if __name__ == "__main__":
     train_ex = 100
 
     # Build model
-    cost = construct_model(Tanh(), train_ex + 1, 30, 2)
+    cost, error_rate = construct_model(Tanh(), train_ex + 1, 30, 2)
 
     # Build datastream
     train_stream = prepare_data("ARCENE", "train",
                                 RandomTransposeIt(10, True, 100, True))
 
     # Train the model
-    train_model(cost, train_stream, load_location=None, save_location=None)
+    train_model(cost, error_rate, train_stream, load_location=None, save_location=None)

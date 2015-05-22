@@ -1,7 +1,7 @@
 import logging
-import numpy
+import numpy as np
 
-from blocks.algorithms import GradientDescent, Scale, StepRule
+from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Tanh, Softmax, Linear
 from blocks.bricks.recurrent import SimpleRecurrent
 from blocks.dump import load_parameter_values
@@ -53,7 +53,8 @@ def construct_model(activation_function, input_dim, hidden_dim, out_dim):
     return cost
 
 
-def train_model(cost, train_stream, test_stream, load_location=None, save_location=None):
+def train_model(cost, train_stream, test_stream,
+                load_location=None, save_location=None):
 
     cost.name = "Cross_entropy"
 
@@ -74,10 +75,10 @@ def train_model(cost, train_stream, test_stream, load_location=None, save_locati
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost], test_stream,
-                                 prefix='test', after_epoch=False, every_n_epochs=10),
-            DataStreamMonitoring([cost], train_stream,
-                                 prefix='train', after_epoch=False, every_n_epochs=10),
+            DataStreamMonitoring([cost], test_stream, prefix='test',
+                                 after_epoch=False, every_n_epochs=10),
+            DataStreamMonitoring([cost], train_stream, prefix='train',
+                                 after_epoch=False, every_n_epochs=10),
             Printing(after_epoch=False, every_n_epochs=10)
         ]
     )

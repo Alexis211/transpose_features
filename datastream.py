@@ -1,7 +1,4 @@
-import os
 import logging
-import numpy
-from fuel import config
 import random
 
 from picklable_itertools import iter_
@@ -15,10 +12,14 @@ import dataset
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
+
 def batch(items, batch_size):
-    return [items[i: min(i + batch_size, len(items))] for i in xrange(0, len(items), batch_size)]
+    return [items[i: min(i + batch_size, len(items))]
+            for i in xrange(0, len(items), batch_size)]
+
 
 class NPYTransposeDataset(Dataset):
+
     def __init__(self, ref_data, data, **kwargs):
         self.ref_data_x, self.ref_data_y = ref_data
         self.data_x, self.data_y = data
@@ -30,17 +31,23 @@ class NPYTransposeDataset(Dataset):
         super(NPYTransposeDataset, self).__init__(**kwargs)
 
     def get_data(self, state=None, request=None):
-        if request == None:
+        if request is None:
             raise ValueError("Expected request: i vector and j vector")
         i_list, j_list = request
-        return self.ref_data_x[:, j_list].T, self.data_x[i_list, :][:, j_list], self.data_y[i_list]
+        return (self.ref_data_x[:, j_list].T,
+                self.data_x[i_list, :][:, j_list],
+                self.data_y[i_list])
+
 
 class TransposeIt(IterationScheme):
+
     def set_dims(self, nitems, nfeats):
         self.nitems = nitems
         self.nfeats = nfeats
 
+
 class RandomTransposeIt(TransposeIt):
+
     def __init__(self, ibatchsize, irandom, jbatchsize, jrandom):
         self.ibatchsize = ibatchsize
         self.jbatchsize = jbatchsize
@@ -90,5 +97,6 @@ def prepare_data(name, part, iteration_scheme):
 
 if __name__ == "__main__":
     # Test
-    stream = prepare_data("ARCENE", "train", RandomTransposeIt(10, True, 100, True))
-    print next(stream.get_epoch_iterator())
+    stream = prepare_data(
+        "ARCENE", "train", RandomTransposeIt(10, True, 100, True))
+    print(next(stream.get_epoch_iterator()))

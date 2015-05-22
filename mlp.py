@@ -1,7 +1,11 @@
 import logging
 import numpy as np
 
+<<<<<<< HEAD
 from blocks.algorithms import GradientDescent, Momentum
+=======
+from blocks.algorithms import GradientDescent, Momentum, StepRule
+>>>>>>> Change learning rate
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
@@ -74,7 +78,7 @@ def train_model(cost, train_stream, load_location=None, save_location=None):
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    step_rule = Momentum(learning_rate=0.1, momentum=0.9)
+    step_rule = Momentum(learning_rate=0.01, momentum=0.9)
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(

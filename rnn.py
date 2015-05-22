@@ -1,26 +1,24 @@
-import logging
-import numpy as np
-
-from blocks.algorithms import GradientDescent, Momentum, AdaDelta
-from blocks.bricks import Tanh, Softmax, Linear
-from blocks.bricks.recurrent import LSTM
-from blocks.dump import load_parameter_values
-from blocks.dump import MainLoopDumpManager
-from blocks.extensions import Printing
-from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
-from blocks.graph import ComputationGraph
-from blocks.initialization import IsotropicGaussian, Constant
-from blocks.main_loop import MainLoop
-from blocks.model import Model
 from theano import tensor
 
-from datastream import prepare_data, RandomTransposeIt, LogregOrderTransposeIt
+from blocks.algorithms import Momentum, AdaDelta
+from blocks.bricks import Tanh, Softmax, Linear
+from blocks.bricks.recurrent import LSTM
+from blocks.initialization import IsotropicGaussian, Constant
 
-logging.basicConfig(level='INFO')
-logger = logging.getLogger(__name__)
+from datastream import LogregOrderTransposeIt
 
 
-def construct_model_rnn(activation_function, input_dim, hidden_dim, out_dim):
+# step_rule = Momentum(learning_rate=0.01, momentum=0.9)
+step_rule = AdaDelta()
+
+iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
+valid_iter_scheme = iter_scheme
+
+activation_function = Tanh()
+
+hidden_dim = 30
+
+def construct_model(input_dim, out_dim):
     # Construct the model
     r = tensor.fmatrix('r')
     x = tensor.fmatrix('x')
@@ -72,55 +70,3 @@ def construct_model_rnn(activation_function, input_dim, hidden_dim, out_dim):
     return cost, error_rate
 
 
-def train_model(cost, error_rate, train_stream, valid_stream, load_location=None, save_location=None):
-
-    cost.name = "cross_entropy"
-    error_rate.name = 'error_rate'
-
-    # Define the model
-    model = Model(cost)
-
-    # Load the parameters from a dumped model
-    if load_location is not None:
-        logger.info('Loading parameters...')
-        model.set_param_values(load_parameter_values(load_location))
-
-    cg = ComputationGraph(cost)
-    # step_rule = Momentum(learning_rate=0.1, momentum=0.9)
-    step_rule = AdaDelta()
-    algorithm = GradientDescent(cost=cost, step_rule=step_rule,
-                                params=cg.parameters)
-    main_loop = MainLoop(
-        model=model,
-        data_stream=train_stream,
-        algorithm=algorithm,
-        extensions=[
-            TrainingDataMonitoring([cost, error_rate], prefix='train', every_n_epochs=1),
-            DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
-                                 after_epoch=False, every_n_epochs=10),
-            Printing(every_n_epochs=1, after_epoch=False)
-        ]
-    )
-    main_loop.run()
-
-    # Save the main loop
-    if save_location is not None:
-        logger.info('Saving the main loop...')
-        dump_manager = MainLoopDumpManager(save_location)
-        dump_manager.dump(main_loop)
-        logger.info('Saved')
-
-
-if __name__ == "__main__":
-    train_ex = 100
-
-    # Build model
-    cost, error_rate = construct_model_rnn(Tanh(), train_ex + 1, 30, 2)
-
-    # Build datastream
-    iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
-    train_stream = prepare_data("ARCENE", "train", iter_scheme)
-    valid_stream = prepare_data("ARCENE", "valid", iter_scheme)
-
-    # Train the model
-    train_model(cost, error_rate, train_stream, valid_stream, load_location=None, save_location=None)

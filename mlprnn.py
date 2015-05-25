@@ -1,7 +1,7 @@
 from theano import tensor
 
 from blocks.algorithms import Momentum, AdaDelta
-from blocks.bricks import Tanh, Softmax, Linear
+from blocks.bricks import Tanh, Softmax, Linear, MLP
 from blocks.bricks.recurrent import LSTM
 from blocks.initialization import IsotropicGaussian, Constant
 
@@ -12,19 +12,28 @@ from blocks.graph import ComputationGraph, apply_noise
 from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 
+activation_function = Tanh()
+
+mlp_hidden_dims = [5]
+lstm_hidden_dim = 10
+
+noise_std = 0.01
+
+num_feats = 100
+use_ensembling = True
+
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()
 
 # iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
-iter_scheme = RandomTransposeIt(10, True, 100, True)
-valid_iter_scheme = iter_scheme
+iter_scheme = RandomTransposeIt(10, True, num_feats, True)
+valid_iter_scheme = RandomTransposeIt(10, True, None if use_ensembling else num_feats, True)
 
-activation_function = Tanh()
+param_desc = '%s-%d-%s-%s' % (repr(mlp_hidden_dims),
+                              lstm_hidden_dim,
+                              repr(noise_std),
+                              'E' if use_ensembling else 'i')
 
-mlp_hidden_dim = 10
-lstm_hidden_dim = 20
-
-noise_std = 0.01
 
 def construct_model(input_dim, out_dim):
     # Construct the model
@@ -51,9 +60,19 @@ def construct_model(input_dim, out_dim):
     # Change concat from Batch x Time x Features to T X B x F
     mlp_input = concat.dimshuffle(1, 0, 2)
 
-    mlp = Linear(input_dim=input_dim, output_dim=mlp_hidden_dim, name='mlp')
+    # Split time dimension into batches of size num_feats
+    # Join that dimension with the B dimension
+    ens_shape = (num_feats,
+                 mlp_input.shape[0]/num_feats,
+                 mlp_input.shape[1])
+    mlp_input = mlp_input.reshape(ens_shape + (input_dim,))
+    mlp_input = mlp_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim))
 
-    lstm_bot_linear = Linear(input_dim=mlp_hidden_dim, output_dim=4 * lstm_hidden_dim,
+    mlp = MLP(dims=[input_dim] + mlp_hidden_dims,
+              activations=[activation_function for _ in mlp_hidden_dims],
+              name='mlp')
+
+    lstm_bot_linear = Linear(input_dim=mlp_hidden_dims[-1], output_dim=4 * lstm_hidden_dim,
                     name="lstm_input_linear")
     lstm = LSTM(dim=lstm_hidden_dim, activation=activation_function,
                 name="hidden_recurrent")
@@ -66,6 +85,10 @@ def construct_model(input_dim, out_dim):
     states = lstm.apply(pre_rnn)[0]
     activations = lstm_top_linear.apply(states)
 
+    activations = activations.reshape(ens_shape + (out_dim,))
+    # Mean over time
+    activations = tensor.mean(activations, axis=0)
+    # Unsplit batches (ensembling)
     activations = tensor.mean(activations, axis=0)
 
     cost = Softmax().categorical_cross_entropy(y, activations)

@@ -54,7 +54,7 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
             DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5),
             Printing(every_n_epochs=1, after_epoch=False),
-            Plot(document='tr_'+model_name,
+            Plot(document='tr_'+model_name+'_'+config.param_desc,
                  channels=[['train_cross_entropy', 'valid_cross_entropy'],
                            ['train_error_rate', 'valid_error_rate']],
                  every_n_epochs=1, after_epoch=False)

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def batch(items, batch_size):
+    if batch_size == None:
+        return [items]
     return [items[i: min(i + batch_size, len(items))]
             for i in xrange(0, len(items), batch_size)]
 

@@ -5,18 +5,25 @@ from blocks.bricks import Tanh, Softmax, Linear
 from blocks.bricks.recurrent import LSTM
 from blocks.initialization import IsotropicGaussian, Constant
 
-from datastream import LogregOrderTransposeIt
+from blocks.filter import VariableFilter
+from blocks.roles import WEIGHT
+from blocks.graph import ComputationGraph, apply_noise
+
+from datastream import LogregOrderTransposeIt, RandomTransposeIt
+
+activation_function = Tanh()
+
+hidden_dim = 10
+
+noise_std = 0.01
 
 
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()
 
-iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
+# iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
+iter_scheme = RandomTransposeIt(10, True, 100, True)
 valid_iter_scheme = iter_scheme
-
-activation_function = Tanh()
-
-hidden_dim = 30
 
 def construct_model(input_dim, out_dim):
     # Construct the model
@@ -66,6 +73,12 @@ def construct_model(input_dim, out_dim):
         brick.weights_init = IsotropicGaussian(0.01)
         brick.biases_init = Constant(0.)
         brick.initialize()
+
+    # apply noise
+    cg = ComputationGraph([cost, error_rate])
+    noise_vars = VariableFilter(roles=[WEIGHT])(cg)
+    apply_noise(cg, noise_vars, noise_std)
+    [cost, error_rate] = cg.outputs
 
     return cost, error_rate
 

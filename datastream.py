@@ -81,8 +81,8 @@ class LogregOrderTransposeIt(TransposeIt):
             w = cPickle.load(f)
 
         jsort = (-(w**2)).flatten().argsort(axis=0)
-        js = jsort[:jcount]
-        self.js = list(js)
+
+        self.js = list(jsort[:jcount])
         random.shuffle(self.js)
 
     def get_request_iterator(self):

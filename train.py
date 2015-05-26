@@ -50,7 +50,8 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            TrainingDataMonitoring([cost, error_rate], prefix='train', every_n_epochs=1),
+            TrainingDataMonitoring(
+                [cost, error_rate], prefix='train', every_n_epochs=1),
             DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5),
             Printing(every_n_epochs=1, after_epoch=False),
@@ -70,7 +71,6 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
         logger.info('Saved')
 
 
-
 if __name__ == "__main__":
     # Build datastream
     train_stream = prepare_data("ARCENE", "train", config.iter_scheme)
@@ -82,4 +82,5 @@ if __name__ == "__main__":
     cost, error_rate = config.construct_model(train_ex, 2)
 
     # Train the model
-    train_model(cost, error_rate, train_stream, valid_stream, load_location=None, save_location=None)
+    train_model(cost, error_rate, train_stream, valid_stream,
+                load_location=None, save_location=None)

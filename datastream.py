@@ -73,6 +73,7 @@ class RandomTransposeIt(TransposeIt):
 
         return iter_([(ii, jj) for ii in ib for jj in jb])
 
+
 class LogregOrderTransposeIt(TransposeIt):
 
     def __init__(self, ibatchsize, irandom, jlogregparamfile, jcount):

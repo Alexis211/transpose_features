@@ -26,9 +26,11 @@ step_rule = AdaDelta()
 
 # iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
 iter_scheme = RandomTransposeIt(10, True, num_feats, True)
-valid_iter_scheme = RandomTransposeIt(10, True, None if use_ensembling else num_feats, True)
+valid_iter_scheme = RandomTransposeIt(
+    10, True, None if use_ensembling else num_feats, True)
 
-param_desc = '%d-%f-%s' % (hidden_dim, noise_std, 'E' if use_ensembling else 'i')
+param_desc = '%d-%f-%s' % (hidden_dim, noise_std,
+                           'E' if use_ensembling else 'i')
 
 
 def construct_model(input_dim, out_dim):
@@ -91,7 +93,7 @@ def construct_model(input_dim, out_dim):
     # Initialize parameters
 
     for brick in (linear, lstm, top_linear):
-        brick.weights_init = IsotropicGaussian(0.01)
+        brick.weights_init = IsotropicGaussian(0.1)
         brick.biases_init = Constant(0.)
         brick.initialize()
 
@@ -102,5 +104,3 @@ def construct_model(input_dim, out_dim):
     [cost, error_rate] = cg.outputs
 
     return cost, error_rate
-
-

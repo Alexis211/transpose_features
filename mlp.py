@@ -40,9 +40,9 @@ def construct_model(input_dim, output_dim):
     concat = tensor.concatenate([r_rep, x3], axis=2)
     mlp_input = concat.reshape((nx * nj, nr + 1))
 
-    # input_dim must be nr+1
+    # input_dim must be nr
     mlp = MLP(activations=activation_function + [None],
-              dims=[input_dim] + hidden_dims + [output_dim])
+              dims=[input_dim+1] + hidden_dims + [output_dim])
 
     activations = mlp.apply(mlp_input)
 

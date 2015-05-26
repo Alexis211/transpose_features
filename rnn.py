@@ -14,9 +14,9 @@ from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 activation_function = Tanh()
 
-hidden_dim = 10
+hidden_dim = 4
 
-noise_std = 0.1
+noise_std = 0.01
 
 num_feats = 100
 use_ensembling = True
@@ -61,10 +61,10 @@ def construct_model(input_dim, out_dim):
     ens_shape = (num_feats,
                  rnn_input.shape[0]/num_feats,
                  rnn_input.shape[1])
-    rnn_input = rnn_input.reshape(ens_shape + (input_dim,))
-    rnn_input = rnn_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim))
+    rnn_input = rnn_input.reshape(ens_shape + (input_dim+1,))
+    rnn_input = rnn_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim+1))
 
-    linear = Linear(input_dim=input_dim, output_dim=4 * hidden_dim,
+    linear = Linear(input_dim=input_dim+1, output_dim=4 * hidden_dim,
                     name="input_linear")
     lstm = LSTM(dim=hidden_dim, activation=activation_function,
                 name="hidden_recurrent")

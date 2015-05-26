@@ -14,10 +14,10 @@ from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 activation_function = Tanh()
 
-mlp_hidden_dims = [40, 40]
-lstm_hidden_dim = 40
+mlp_hidden_dims = [10]
+lstm_hidden_dim = 10
 noise_std = 0.01
-dropout = 0.5
+dropout = 0
 
 num_feats = 100
 use_ensembling = False
@@ -61,13 +61,14 @@ def construct_model(input_dim, out_dim):
     # Change concat from Batch x Time x Features to T X B x F
     mlp_input = concat.dimshuffle(1, 0, 2)
 
-    # Split time dimension into batches of size num_feats
-    # Join that dimension with the B dimension
-    ens_shape = (num_feats,
-                 mlp_input.shape[0]/num_feats,
-                 mlp_input.shape[1])
-    mlp_input = mlp_input.reshape(ens_shape + (input_dim+1,))
-    mlp_input = mlp_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim+1))
+    if use_ensembling:
+        # Split time dimension into batches of size num_feats
+        # Join that dimension with the B dimension
+        ens_shape = (num_feats,
+                     mlp_input.shape[0]/num_feats,
+                     mlp_input.shape[1])
+        mlp_input = mlp_input.reshape(ens_shape + (input_dim+1,))
+        mlp_input = mlp_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim+1))
 
     mlp = MLP(dims=[input_dim+1] + mlp_hidden_dims,
               activations=[activation_function for _ in mlp_hidden_dims],
@@ -86,10 +87,12 @@ def construct_model(input_dim, out_dim):
     states = lstm.apply(pre_rnn)[0]
     activations = lstm_top_linear.apply(states)
 
-    activations = activations.reshape(ens_shape + (out_dim,))
+    if use_ensembling:
+        activations = activations.reshape(ens_shape + (out_dim,))
+        # Unsplit batches (ensembling)
+        activations = tensor.mean(activations, axis=1)
+
     # Mean over time
-    activations = tensor.mean(activations, axis=0)
-    # Unsplit batches (ensembling)
     activations = tensor.mean(activations, axis=0)
 
     cost = Softmax().categorical_cross_entropy(y, activations)

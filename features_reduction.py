@@ -20,7 +20,7 @@ logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 
-def construct_model(activation_function, input_dim, hidden_dim, out_dim):
+def construct_model(activation_function, r_dim, hidden_dim, out_dim):
     # Construct the model
     r = tensor.fmatrix('r')
     x = tensor.fmatrix('x')
@@ -34,18 +34,23 @@ def construct_model(activation_function, input_dim, hidden_dim, out_dim):
     # x is nx x nj
     # y is nx
 
-    # r_rep is nx x nj x nr
+    # Get a representation of r of size r_dim
+    r = DAE(r)
+
+    # r is now nj x r_dim
+
+    # r_rep is nx x nj x r_dim
     r_rep = r[None, :, :].repeat(axis=0, repeats=nx)
     # x3 is nx x nj x 1
     x3 = x[:, :, None]
 
-    # concat is nx x nj x (nr + 1)
+    # concat is nx x nj x (r_dim + 1)
     concat = tensor.concatenate([r_rep, x3], axis=2)
 
     # Change concat from Batch x Time x Features to T X B x F
     rnn_input = concat.dimshuffle(1, 0, 2)
 
-    linear = Linear(input_dim=input_dim, output_dim=4 * hidden_dim,
+    linear = Linear(input_dim=r_dim + 1, output_dim=4 * hidden_dim,
                     name="input_linear")
     lstm = LSTM(dim=hidden_dim, activation=activation_function,
                 name="hidden_recurrent")
@@ -114,9 +119,10 @@ def train_model(cost, error_rate, train_stream,
 
 if __name__ == "__main__":
     train_ex = 100
+    r_dim = 50
 
     # Build model
-    cost, error_rate = construct_model(Tanh(), train_ex + 1, 30, 2)
+    cost, error_rate = construct_model(Tanh(), r_dim, 30, 2)
 
     # Build datastream
     train_stream = prepare_data("ARCENE", "train",

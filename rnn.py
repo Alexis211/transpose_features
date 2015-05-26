@@ -16,10 +16,12 @@ activation_function = Tanh()
 
 hidden_dim = 4
 
-noise_std = 0.01
+noise_std = 0.1
 
 num_feats = 100
 use_ensembling = False
+
+randomize_feats = True
 
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()
@@ -29,9 +31,11 @@ iter_scheme = RandomTransposeIt(10, True, num_feats, True)
 valid_iter_scheme = RandomTransposeIt(
     10, True, None if use_ensembling else num_feats, True)
 
-param_desc = '%d-%f-%s' % (hidden_dim, noise_std,
-                           'E' if use_ensembling else 'i')
+param_desc = '%d-%f-%s%s' % (hidden_dim, noise_std,
+                           'E' if use_ensembling else '',
+                           'R' if randomize_feats else '')
 
+pt_freq = 1
 
 def construct_model(input_dim, out_dim):
     # Construct the model

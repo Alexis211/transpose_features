@@ -51,14 +51,14 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
         algorithm=algorithm,
         extensions=[
             TrainingDataMonitoring(
-                [cost, error_rate], prefix='train', every_n_epochs=1),
+                [cost, error_rate], prefix='train', every_n_epochs=1*config.pt_freq),
             DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
-                                 after_epoch=False, every_n_epochs=5),
-            Printing(every_n_epochs=1, after_epoch=False),
-            # Plot(document='tr_'+model_name+'_'+config.param_desc,
-            #      channels=[['train_cross_entropy', 'valid_cross_entropy'],
-            #                ['train_error_rate', 'valid_error_rate']],
-            #      every_n_epochs=1, after_epoch=False)
+                                 after_epoch=False, every_n_epochs=5*config.pt_freq),
+            Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
+            Plot(document='tr_'+model_name+'_'+config.param_desc,
+                 channels=[['train_cross_entropy', 'valid_cross_entropy'],
+                           ['train_error_rate', 'valid_error_rate']],
+                 every_n_epochs=1*config.pt_freq, after_epoch=False)
         ]
     )
     main_loop.run()
@@ -75,7 +75,8 @@ if __name__ == "__main__":
     # Build datastream
     train_stream, valid_stream = prepare_data("ARCENE",
                                               config.iter_scheme,
-                                              config.valid_iter_scheme)
+                                              config.valid_iter_scheme,
+                                              randomize_feats=config.randomize_feats)
 
     train_ex = train_stream.dataset.nitems
 

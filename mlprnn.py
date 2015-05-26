@@ -14,13 +14,15 @@ from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 activation_function = Tanh()
 
-mlp_hidden_dims = [10]
-lstm_hidden_dim = 10
-noise_std = 0.01
+mlp_hidden_dims = [100]
+lstm_hidden_dim = 42
+noise_std = 0.1
 dropout = 0
 
 num_feats = 100
 use_ensembling = False
+
+randomize_feats = True
 
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()
@@ -29,11 +31,12 @@ step_rule = AdaDelta()
 iter_scheme = RandomTransposeIt(10, True, num_feats, True)
 valid_iter_scheme = RandomTransposeIt(10, True, None if use_ensembling else num_feats, True)
 
-param_desc = '%s-%d-%s-%s-%s' % (repr(mlp_hidden_dims),
+param_desc = '%s-%d-%s-%s-%s%s' % (repr(mlp_hidden_dims),
                               lstm_hidden_dim,
                               repr(noise_std),
                               repr(dropout),
-                              'E' if use_ensembling else 'i')
+                              'E' if use_ensembling else '',
+                              'R' if randomize_feats else '')
 
 
 def construct_model(input_dim, out_dim):

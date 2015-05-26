@@ -25,8 +25,8 @@ def batch(items, batch_size):
 
 class NPYTransposeDataset(Dataset):
 
-    def __init__(self, ref_data, data, **kwargs):
-        self.ref_data_x, self.ref_data_y = ref_data
+    def __init__(self, ref_data_x, data, **kwargs):
+        self.ref_data_x = ref_data_x
         self.data_x, self.data_y = data
 
         self.nitems, self.nfeats = self.data_x.shape
@@ -100,7 +100,7 @@ class LogregOrderTransposeIt(TransposeIt):
         return iter_([(ii, self.js) for ii in ib])
 
 
-def prepare_data(name, iteration_scheme, valid_iteration_scheme):
+def prepare_data(name, iteration_scheme, valid_iteration_scheme, randomize_feats=False):
     if name == 'ARCENE':
         train_set_x, train_set_y, valid_set_x, valid_set_y = dataset.load_ARCENE()
     elif name == 'AMLALL':
@@ -108,14 +108,15 @@ def prepare_data(name, iteration_scheme, valid_iteration_scheme):
     else:
         raise ValueError("No such dataset " + name)
 
-    train_set = (train_set_x, train_set_y)
-    valid_set = (valid_set_x, valid_set_y)
+    if randomize_feats:
+        transform = numpy.random.randn(train_set_x.shape[0], train_set_x.shape[0])
+        train_set_x_transform = numpy.dot(transform, train_set_x).astype(numpy.float32)
+        feats = train_set_x_transform
+    else:
+        feats = train_set_x
 
-    random_features = numpy.random.randn(
-        *train_set_x.shape).astype(dtype=numpy.float32), train_set_y
-    data_train = NPYTransposeDataset(random_features, train_set)
-
-    data_valid = NPYTransposeDataset(random_features, valid_set)
+    data_train = NPYTransposeDataset(feats, (train_set_x, train_set_y))
+    data_valid = NPYTransposeDataset(feats, (valid_set_x, valid_set_y))
 
     iteration_scheme.set_dims(data_train.nitems, data_train.nfeats)
     valid_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)

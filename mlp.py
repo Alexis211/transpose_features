@@ -17,13 +17,16 @@ step_rule = AdaDelta()
 iter_scheme = RandomTransposeIt(None, True, None, True)
 valid_iter_scheme = iter_scheme
 
-noise_std = 0.01
+noise_std = 0.1
 
-activation_functions = [Tanh(), None]
+randomize_feats = True
 
-hidden_dims = [2]
+hidden_dims = [101]
+activation_functions = [Tanh() for _ in hidden_dims] + [None]
 
-param_desc = '%s-%s' % (repr(hidden_dims), repr(noise_std))
+param_desc = '%s-%s-%s' % (repr(hidden_dims), repr(noise_std), 'R' if randomize_feats else '')
+
+pt_freq = 11
 
 def construct_model(input_dim, output_dim):
     # Construct the model

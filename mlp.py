@@ -1,25 +1,23 @@
-import logging
-import numpy as np
-
-from blocks.algorithms import GradientDescent, Momentum, StepRule
-from blocks.bricks import Rectifier, MLP, Softmax
-from blocks.dump import load_parameter_values
-from blocks.dump import MainLoopDumpManager
-from blocks.extensions import Printing
-from blocks.extensions.monitoring import DataStreamMonitoring
-from blocks.graph import ComputationGraph
-from blocks.initialization import IsotropicGaussian, Constant
-from blocks.main_loop import MainLoop
-from blocks.model import Model
 from theano import tensor
 
-from datastream import prepare_data, RandomTransposeIt
+from blocks.algorithms import Momentum
+from blocks.bricks import Rectifier, MLP, Softmax, Tanh
+from blocks.initialization import IsotropicGaussian, Constant
 
-logging.basicConfig(level='INFO')
-logger = logging.getLogger(__name__)
+from datastream import RandomTransposeIt
 
 
-def construct_model(activation_function, input_dim, hidden_dims, output_dim):
+step_rule = Momentum(learning_rate=0.01, momentum=0.9)
+
+iter_scheme = RandomTransposeIt(10, True, 100, True)
+valid_iter_scheme = iter_scheme
+
+activation_function = [Tanh()]
+
+hidden_dims = [30]
+
+
+def construct_model(input_dim, output_dim):
     # Construct the model
     r = tensor.fmatrix('r')
     x = tensor.fmatrix('x')
@@ -63,54 +61,3 @@ def construct_model(activation_function, input_dim, hidden_dims, output_dim):
 
     return cost, error_rate
 
-
-def train_model(cost, error_rate, train_stream, load_location=None, save_location=None):
-
-    cost.name = "Cross_entropy"
-    error_rate.name = 'Error_rate'
-
-    # Define the model
-    model = Model(cost)
-
-    # Load the parameters from a dumped model
-    if load_location is not None:
-        logger.info('Loading parameters...')
-        model.set_param_values(load_parameter_values(load_location))
-
-    cg = ComputationGraph(cost)
-    step_rule = Momentum(learning_rate=0.01, momentum=0.9)
-    algorithm = GradientDescent(cost=cost, step_rule=step_rule,
-                                params=cg.parameters)
-    main_loop = MainLoop(
-        model=model,
-        data_stream=train_stream,
-        algorithm=algorithm,
-        extensions=[
-            DataStreamMonitoring([cost, error_rate], train_stream,
-                                 prefix='train', after_epoch=False,
-                                 every_n_epochs=10),
-            Printing(after_epoch=False, every_n_epochs=10)
-        ]
-    )
-    main_loop.run()
-
-    # Save the main loop
-    if save_location is not None:
-        logger.info('Saving the main loop...')
-        dump_manager = MainLoopDumpManager(save_location)
-        dump_manager.dump(main_loop)
-        logger.info('Saved')
-
-
-if __name__ == "__main__":
-    train_ex = 100
-
-    # Build model
-    cost, error_rate = construct_model([Rectifier()], train_ex + 1, [30], 2)
-
-    # Build datastream
-    train_stream = prepare_data("ARCENE", "train",
-                                RandomTransposeIt(10, True, 100, True))
-
-    # Train the model
-    train_model(cost, error_rate, train_stream, load_location=None, save_location=None)

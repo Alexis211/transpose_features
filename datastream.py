@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def batch(items, batch_size):
+    if batch_size == None:
+        return [items]
     return [items[i: min(i + batch_size, len(items))]
             for i in xrange(0, len(items), batch_size)]
 
@@ -82,8 +84,8 @@ class LogregOrderTransposeIt(TransposeIt):
             w = cPickle.load(f)
 
         jsort = (-(w**2)).flatten().argsort(axis=0)
-        js = jsort[:jcount]
-        self.js = list(js)
+
+        self.js = list(jsort[:jcount])
         random.shuffle(self.js)
 
     def get_request_iterator(self):

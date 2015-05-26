@@ -1,7 +1,7 @@
 from theano import tensor
 
 from blocks.algorithms import Momentum, AdaDelta
-from blocks.bricks import Tanh, Softmax, Linear
+from blocks.bricks import Tanh, Softmax, Linear, MLP
 from blocks.bricks.recurrent import LSTM
 from blocks.initialization import IsotropicGaussian, Constant
 
@@ -14,9 +14,10 @@ from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 activation_function = Tanh()
 
-hidden_dim = 10
+mlp_hidden_dims = [5]
+lstm_hidden_dim = 10
 
-noise_std = 0.1
+noise_std = 0.01
 
 num_feats = 100
 use_ensembling = True
@@ -26,11 +27,12 @@ step_rule = AdaDelta()
 
 # iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
 iter_scheme = RandomTransposeIt(10, True, num_feats, True)
-valid_iter_scheme = RandomTransposeIt(
-    10, True, None if use_ensembling else num_feats, True)
+valid_iter_scheme = RandomTransposeIt(10, True, None if use_ensembling else num_feats, True)
 
-param_desc = '%d-%f-%s' % (hidden_dim, noise_std,
-                           'E' if use_ensembling else 'i')
+param_desc = '%s-%d-%s-%s' % (repr(mlp_hidden_dims),
+                              lstm_hidden_dim,
+                              repr(noise_std),
+                              'E' if use_ensembling else 'i')
 
 
 def construct_model(input_dim, out_dim):
@@ -56,27 +58,32 @@ def construct_model(input_dim, out_dim):
     concat = tensor.concatenate([r_rep, x3], axis=2)
 
     # Change concat from Batch x Time x Features to T X B x F
-    rnn_input = concat.dimshuffle(1, 0, 2)
+    mlp_input = concat.dimshuffle(1, 0, 2)
 
     # Split time dimension into batches of size num_feats
     # Join that dimension with the B dimension
     ens_shape = (num_feats,
-                 rnn_input.shape[0]/num_feats,
-                 rnn_input.shape[1])
-    rnn_input = rnn_input.reshape(ens_shape + (input_dim,))
-    rnn_input = rnn_input.reshape(
-        (ens_shape[0], ens_shape[1] * ens_shape[2], input_dim))
+                 mlp_input.shape[0]/num_feats,
+                 mlp_input.shape[1])
+    mlp_input = mlp_input.reshape(ens_shape + (input_dim,))
+    mlp_input = mlp_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim))
 
-    linear = Linear(input_dim=input_dim, output_dim=4 * hidden_dim,
-                    name="input_linear")
-    lstm = LSTM(dim=hidden_dim, activation=activation_function,
+    mlp = MLP(dims=[input_dim] + mlp_hidden_dims,
+              activations=[activation_function for _ in mlp_hidden_dims],
+              name='mlp')
+
+    lstm_bot_linear = Linear(input_dim=mlp_hidden_dims[-1], output_dim=4 * lstm_hidden_dim,
+                    name="lstm_input_linear")
+    lstm = LSTM(dim=lstm_hidden_dim, activation=activation_function,
                 name="hidden_recurrent")
-    top_linear = Linear(input_dim=hidden_dim, output_dim=out_dim,
+    lstm_top_linear = Linear(input_dim=lstm_hidden_dim, output_dim=out_dim,
                         name="out_linear")
 
-    pre_rnn = linear.apply(rnn_input)
+    rnn_input = mlp.apply(mlp_input)
+
+    pre_rnn = lstm_bot_linear.apply(rnn_input)
     states = lstm.apply(pre_rnn)[0]
-    activations = top_linear.apply(states)
+    activations = lstm_top_linear.apply(states)
 
     activations = activations.reshape(ens_shape + (out_dim,))
     # Mean over time
@@ -90,9 +97,8 @@ def construct_model(input_dim, out_dim):
     error_rate = tensor.neq(y, pred).mean()
 
     # Initialize parameters
-
-    for brick in (linear, lstm, top_linear):
-        brick.weights_init = IsotropicGaussian(0.1)
+    for brick in (mlp, lstm_bot_linear, lstm, lstm_top_linear):
+        brick.weights_init = IsotropicGaussian(0.01)
         brick.biases_init = Constant(0.)
         brick.initialize()
 
@@ -103,3 +109,5 @@ def construct_model(input_dim, out_dim):
     [cost, error_rate] = cg.outputs
 
     return cost, error_rate
+
+

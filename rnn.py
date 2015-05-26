@@ -16,10 +16,10 @@ activation_function = Tanh()
 
 hidden_dim = 10
 
-noise_std = 0.1
+noise_std = 0.01
 
 num_feats = 100
-use_ensembling = True
+use_ensembling = False
 
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()

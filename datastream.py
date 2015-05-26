@@ -1,5 +1,6 @@
 import logging
 import random
+import numpy
 
 import cPickle
 
@@ -83,7 +84,7 @@ class LogregOrderTransposeIt(TransposeIt):
         with open(jlogregparamfile) as f:
             w = cPickle.load(f)
 
-        jsort = (-(w**2)).flatten().argsort(axis=0)
+        jsort = (-(w ** 2)).flatten().argsort(axis=0)
 
         self.js = list(jsort[:jcount])
         random.shuffle(self.js)
@@ -99,7 +100,7 @@ class LogregOrderTransposeIt(TransposeIt):
         return iter_([(ii, self.js) for ii in ib])
 
 
-def prepare_data(name, part, iteration_scheme):
+def prepare_data(name, iteration_scheme, valid_iteration_scheme):
     if name == 'ARCENE':
         train_set_x, train_set_y, valid_set_x, valid_set_y = dataset.load_ARCENE()
     elif name == 'AMLALL':
@@ -110,18 +111,20 @@ def prepare_data(name, part, iteration_scheme):
     train_set = (train_set_x, train_set_y)
     valid_set = (valid_set_x, valid_set_y)
 
-    if part == "train":
-        data = NPYTransposeDataset(train_set, train_set)
-    elif part == "valid":
-        data = NPYTransposeDataset(train_set, valid_set)
-    else:
-        raise ValueError("No such part " + part)
+    random_features = numpy.random.randn(
+        *train_set_x.shape).astype(dtype=numpy.float32), train_set_y
+    data_train = NPYTransposeDataset(random_features, train_set)
 
-    iteration_scheme.set_dims(data.nitems, data.nfeats)
+    data_valid = NPYTransposeDataset(random_features, valid_set)
 
-    stream = DataStream(data, iteration_scheme=iteration_scheme)
+    iteration_scheme.set_dims(data_train.nitems, data_train.nfeats)
+    valid_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)
 
-    return stream
+    stream_train = DataStream(data_train, iteration_scheme=iteration_scheme)
+    stream_valid = DataStream(
+        data_valid, iteration_scheme=valid_iteration_scheme)
+
+    return stream_train, stream_valid
 
 
 if __name__ == "__main__":

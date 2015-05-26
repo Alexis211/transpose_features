@@ -55,10 +55,10 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
             DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5),
             Printing(every_n_epochs=1, after_epoch=False),
-            Plot(document='tr_'+model_name+'_'+config.param_desc,
-                 channels=[['train_cross_entropy', 'valid_cross_entropy'],
-                           ['train_error_rate', 'valid_error_rate']],
-                 every_n_epochs=1, after_epoch=False)
+            # Plot(document='tr_'+model_name+'_'+config.param_desc,
+            #      channels=[['train_cross_entropy', 'valid_cross_entropy'],
+            #                ['train_error_rate', 'valid_error_rate']],
+            #      every_n_epochs=1, after_epoch=False)
         ]
     )
     main_loop.run()
@@ -73,8 +73,9 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
 
 if __name__ == "__main__":
     # Build datastream
-    train_stream = prepare_data("ARCENE", "train", config.iter_scheme)
-    valid_stream = prepare_data("ARCENE", "valid", config.valid_iter_scheme)
+    train_stream, valid_stream = prepare_data("ARCENE",
+                                              config.iter_scheme,
+                                              config.valid_iter_scheme)
 
     train_ex = train_stream.dataset.nitems
 
@@ -83,4 +84,4 @@ if __name__ == "__main__":
 
     # Train the model
     train_model(cost, error_rate, train_stream, valid_stream,
-                load_location=None, save_location=None)
+                load_location=None, save_location="trained_rnn")

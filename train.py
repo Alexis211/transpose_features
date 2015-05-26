@@ -80,7 +80,7 @@ if __name__ == "__main__":
     train_ex = train_stream.dataset.nitems
 
     # Build model
-    cost, error_rate = config.construct_model(train_ex + 1, 2)
+    cost, error_rate = config.construct_model(train_ex, 2)
 
     # Train the model
     train_model(cost, error_rate, train_stream, valid_stream,

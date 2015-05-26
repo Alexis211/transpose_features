@@ -7,20 +7,20 @@ from blocks.initialization import IsotropicGaussian, Constant
 
 from blocks.filter import VariableFilter
 from blocks.roles import WEIGHT
-from blocks.graph import ComputationGraph, apply_noise
+from blocks.graph import ComputationGraph, apply_noise, apply_dropout
 
 from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 
 activation_function = Tanh()
 
-mlp_hidden_dims = [5]
+mlp_hidden_dims = [10]
 lstm_hidden_dim = 10
-
 noise_std = 0.01
+dropout = 0
 
 num_feats = 100
-use_ensembling = True
+use_ensembling = False
 
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()
@@ -29,9 +29,10 @@ step_rule = AdaDelta()
 iter_scheme = RandomTransposeIt(10, True, num_feats, True)
 valid_iter_scheme = RandomTransposeIt(10, True, None if use_ensembling else num_feats, True)
 
-param_desc = '%s-%d-%s-%s' % (repr(mlp_hidden_dims),
+param_desc = '%s-%d-%s-%s-%s' % (repr(mlp_hidden_dims),
                               lstm_hidden_dim,
                               repr(noise_std),
+                              repr(dropout),
                               'E' if use_ensembling else 'i')
 
 
@@ -60,15 +61,16 @@ def construct_model(input_dim, out_dim):
     # Change concat from Batch x Time x Features to T X B x F
     mlp_input = concat.dimshuffle(1, 0, 2)
 
-    # Split time dimension into batches of size num_feats
-    # Join that dimension with the B dimension
-    ens_shape = (num_feats,
-                 mlp_input.shape[0]/num_feats,
-                 mlp_input.shape[1])
-    mlp_input = mlp_input.reshape(ens_shape + (input_dim,))
-    mlp_input = mlp_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim))
+    if use_ensembling:
+        # Split time dimension into batches of size num_feats
+        # Join that dimension with the B dimension
+        ens_shape = (num_feats,
+                     mlp_input.shape[0]/num_feats,
+                     mlp_input.shape[1])
+        mlp_input = mlp_input.reshape(ens_shape + (input_dim+1,))
+        mlp_input = mlp_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim+1))
 
-    mlp = MLP(dims=[input_dim] + mlp_hidden_dims,
+    mlp = MLP(dims=[input_dim+1] + mlp_hidden_dims,
               activations=[activation_function for _ in mlp_hidden_dims],
               name='mlp')
 
@@ -85,10 +87,12 @@ def construct_model(input_dim, out_dim):
     states = lstm.apply(pre_rnn)[0]
     activations = lstm_top_linear.apply(states)
 
-    activations = activations.reshape(ens_shape + (out_dim,))
+    if use_ensembling:
+        activations = activations.reshape(ens_shape + (out_dim,))
+        # Unsplit batches (ensembling)
+        activations = tensor.mean(activations, axis=1)
+
     # Mean over time
-    activations = tensor.mean(activations, axis=0)
-    # Unsplit batches (ensembling)
     activations = tensor.mean(activations, axis=0)
 
     cost = Softmax().categorical_cross_entropy(y, activations)
@@ -106,6 +110,7 @@ def construct_model(input_dim, out_dim):
     cg = ComputationGraph([cost, error_rate])
     noise_vars = VariableFilter(roles=[WEIGHT])(cg)
     apply_noise(cg, noise_vars, noise_std)
+    apply_dropout(cg, [mlp_input, rnn_input], dropout)
     [cost, error_rate] = cg.outputs
 
     return cost, error_rate

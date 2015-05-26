@@ -40,7 +40,7 @@ class NPYTransposeDataset(Dataset):
             raise ValueError("Expected request: i vector and j vector")
         i_list, j_list = request
         return (self.ref_data_x[:, j_list].T,
-                self.data_x[i_list, :][:, j_list],
+                self.data_x[:, j_list][i_list, :],
                 self.data_y[i_list])
 
 

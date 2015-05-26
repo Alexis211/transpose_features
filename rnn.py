@@ -14,7 +14,7 @@ from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 activation_function = Tanh()
 
-hidden_dim = 10
+hidden_dim = 4
 
 noise_std = 0.01
 
@@ -58,16 +58,16 @@ def construct_model(input_dim, out_dim):
     # Change concat from Batch x Time x Features to T X B x F
     rnn_input = concat.dimshuffle(1, 0, 2)
 
-    # Split time dimension into batches of size num_feats
-    # Join that dimension with the B dimension
-    ens_shape = (num_feats,
-                 rnn_input.shape[0]/num_feats,
-                 rnn_input.shape[1])
-    rnn_input = rnn_input.reshape(ens_shape + (input_dim,))
-    rnn_input = rnn_input.reshape(
-        (ens_shape[0], ens_shape[1] * ens_shape[2], input_dim))
+    if use_ensembling:
+        # Split time dimension into batches of size num_feats
+        # Join that dimension with the B dimension
+        ens_shape = (num_feats,
+                     rnn_input.shape[0]/num_feats,
+                     rnn_input.shape[1])
+        rnn_input = rnn_input.reshape(ens_shape + (input_dim+1,))
+        rnn_input = rnn_input.reshape((ens_shape[0], ens_shape[1] * ens_shape[2], input_dim+1))
 
-    linear = Linear(input_dim=input_dim, output_dim=4 * hidden_dim,
+    linear = Linear(input_dim=input_dim+1, output_dim=4 * hidden_dim,
                     name="input_linear")
     lstm = LSTM(dim=hidden_dim, activation=activation_function,
                 name="hidden_recurrent")
@@ -78,10 +78,11 @@ def construct_model(input_dim, out_dim):
     states = lstm.apply(pre_rnn)[0]
     activations = top_linear.apply(states)
 
-    activations = activations.reshape(ens_shape + (out_dim,))
+    if use_ensembling:
+        activations = activations.reshape(ens_shape + (out_dim,))
+        # Unsplit batches (ensembling)
+        activations = tensor.mean(activations, axis=1)
     # Mean over time
-    activations = tensor.mean(activations, axis=0)
-    # Unsplit batches (ensembling)
     activations = tensor.mean(activations, axis=0)
 
     cost = Softmax().categorical_cross_entropy(y, activations)

@@ -1,21 +1,29 @@
 from theano import tensor
 
-from blocks.algorithms import Momentum
+from blocks.algorithms import Momentum, AdaDelta
 from blocks.bricks import Rectifier, MLP, Softmax, Tanh
 from blocks.initialization import IsotropicGaussian, Constant
+
+from blocks.filter import VariableFilter
+from blocks.roles import WEIGHT
+from blocks.graph import ComputationGraph, apply_noise
 
 from datastream import RandomTransposeIt
 
 
-step_rule = Momentum(learning_rate=0.01, momentum=0.9)
+# step_rule = Momentum(learning_rate=0.01, momentum=0.9)
+step_rule = AdaDelta()
 
-iter_scheme = RandomTransposeIt(10, True, 100, True)
+iter_scheme = RandomTransposeIt(None, True, None, True)
 valid_iter_scheme = iter_scheme
 
-activation_function = [Tanh()]
+noise_std = 0.01
 
-hidden_dims = [30]
+activation_functions = [Tanh(), None]
 
+hidden_dims = [2]
+
+param_desc = '%s-%s' % (repr(hidden_dims), repr(noise_std))
 
 def construct_model(input_dim, output_dim):
     # Construct the model
@@ -40,24 +48,31 @@ def construct_model(input_dim, output_dim):
     concat = tensor.concatenate([r_rep, x3], axis=2)
     mlp_input = concat.reshape((nx * nj, nr + 1))
 
-    # input_dim must be nr+1
-    mlp = MLP(activations=activation_function + [None],
-              dims=[input_dim] + hidden_dims + [output_dim])
+    # input_dim must be nr
+    mlp = MLP(activations=activation_functions,
+              dims=[input_dim+1] + hidden_dims + [output_dim])
 
     activations = mlp.apply(mlp_input)
 
     act_sh = activations.reshape((nx, nj, output_dim))
     final = act_sh.mean(axis=1)
 
-    cost = Softmax().categorical_cross_entropy(y, final)
+    cost = Softmax().categorical_cross_entropy(y, final).mean()
 
     pred = final.argmax(axis=1)
     error_rate = tensor.neq(y, pred).mean()
 
     # Initialize parameters
-    mlp.weights_init = IsotropicGaussian(0.01)
-    mlp.biases_init = Constant(0.001)
-    mlp.initialize()
+    for brick in [mlp]:
+        brick.weights_init = IsotropicGaussian(0.01)
+        brick.biases_init = Constant(0.001)
+        brick.initialize()
+
+    # apply noise
+    cg = ComputationGraph([cost, error_rate])
+    noise_vars = VariableFilter(roles=[WEIGHT])(cg)
+    apply_noise(cg, noise_vars, noise_std)
+    [cost, error_rate] = cg.outputs
 
     return cost, error_rate
 

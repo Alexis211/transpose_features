@@ -14,22 +14,22 @@ from datastream import LogregOrderTransposeIt, RandomTransposeIt
 
 activation_function = Tanh()
 
-mlp_hidden_dims = [100]
-lstm_hidden_dim = 42
+mlp_hidden_dims = [30]
+lstm_hidden_dim = 20
 noise_std = 0.1
-dropout = 0
+dropout = 0.5
 
 num_feats = 100
 use_ensembling = False
 
-randomize_feats = True
+randomize_feats = False
 
 # step_rule = Momentum(learning_rate=0.01, momentum=0.9)
 step_rule = AdaDelta()
 
 # iter_scheme = LogregOrderTransposeIt(10, True, 'model_param/logreg_param.pkl', 500)
-iter_scheme = RandomTransposeIt(10, True, num_feats, True)
-valid_iter_scheme = RandomTransposeIt(10, True, None if use_ensembling else num_feats, True)
+iter_scheme = RandomTransposeIt(None, True, num_feats, True)
+valid_iter_scheme = RandomTransposeIt(None, True, None if use_ensembling else num_feats, True)
 
 param_desc = '%s-%d-%s-%s-%s%s' % (repr(mlp_hidden_dims),
                               lstm_hidden_dim,
@@ -38,6 +38,7 @@ param_desc = '%s-%d-%s-%s-%s%s' % (repr(mlp_hidden_dims),
                               'E' if use_ensembling else '',
                               'R' if randomize_feats else '')
 
+pt_freq = 1
 
 def construct_model(input_dim, out_dim):
     # Construct the model
@@ -113,7 +114,7 @@ def construct_model(input_dim, out_dim):
     cg = ComputationGraph([cost, error_rate])
     noise_vars = VariableFilter(roles=[WEIGHT])(cg)
     apply_noise(cg, noise_vars, noise_std)
-    apply_dropout(cg, [mlp_input, rnn_input], dropout)
+    apply_dropout(cg, [rnn_input], dropout)
     [cost_reg, error_rate_reg] = cg.outputs
 
     return cost_reg, error_rate_reg, cost, error_rate

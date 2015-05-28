@@ -29,6 +29,9 @@ class NPYTransposeDataset(Dataset):
         self.ref_data_x = ref_data_x
         self.data_x, self.data_y = data
 
+        self.ref_data_x = self.ref_data_x.astype(numpy.float32)
+        self.data_x = self.data_x.astype(numpy.float32)
+
         self.nitems, self.nfeats = self.data_x.shape
 
         self.provides_sources = ('r', 'x', 'y')
@@ -102,18 +105,27 @@ class LogregOrderTransposeIt(TransposeIt):
 
 def prepare_data(name, iteration_scheme, valid_iteration_scheme, randomize_feats=False):
     if name == 'ARCENE':
-        train_set_x, train_set_y, valid_set_x, valid_set_y = dataset.load_ARCENE()
+        ds = dataset.load_ARCENE()
+    elif name == 'DOROTHEA':
+        ds = dataset.load_DOROTHEA()
     elif name == 'AMLALL':
-        train_set_x, train_set_y, valid_set_x, valid_set_y = dataset.load_AMLALL()
+        ds = dataset.load_AMLALL()
     else:
         raise ValueError("No such dataset " + name)
 
+    train_set_x, train_set_y, valid_set_x, valid_set_y, test_set_x = ds
+
+    # Normalize all features according to coefficients given by train_x
+    train_x_norms = numpy.sqrt((train_set_x ** 2).sum(axis=0, keepdims=True))
+    div = train_x_norms + numpy.equal(train_x_norms, 0)
+    train_set_x = train_set_x / div
+    valid_set_x = valid_set_x / div
+    test_set_x = test_set_x / div
+
+    feats = train_set_x
     if randomize_feats:
         transform = numpy.random.randn(train_set_x.shape[0], train_set_x.shape[0])
-        train_set_x_transform = numpy.dot(transform, train_set_x).astype(numpy.float32)
-        feats = train_set_x_transform
-    else:
-        feats = train_set_x
+        feats = numpy.dot(transform, feats)
 
     data_train = NPYTransposeDataset(feats, (train_set_x, train_set_y))
     data_valid = NPYTransposeDataset(feats, (valid_set_x, valid_set_y))

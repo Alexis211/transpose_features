@@ -77,7 +77,7 @@ def train_model(cc, train_stream, valid_stream, load_location=None, save_locatio
 
 if __name__ == "__main__":
     # Build datastream
-    train_stream, valid_stream = prepare_data("ARCENE",
+    train_stream, valid_stream = prepare_data(config.dataset,
                                               config.iter_scheme,
                                               config.valid_iter_scheme,
                                               randomize_feats=config.randomize_feats)

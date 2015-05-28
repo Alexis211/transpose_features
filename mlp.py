@@ -11,20 +11,28 @@ from blocks.graph import ComputationGraph, apply_noise
 from datastream import RandomTransposeIt
 
 
-# step_rule = Momentum(learning_rate=0.01, momentum=0.9)
-step_rule = AdaDelta()
+learning_rate = 0.1
+momentum = 0.9
+# step_rule = AdaDelta()
+step_rule = Momentum(learning_rate=learning_rate, momentum=momentum)
 
-iter_scheme = RandomTransposeIt(None, True, None, True)
+ibatchsize = 50
+iter_scheme = RandomTransposeIt(ibatchsize, True, None, True)
 valid_iter_scheme = iter_scheme
 
 noise_std = 0.1
 
 randomize_feats = True
 
-hidden_dims = [101]
+hidden_dims = [20, 200]
 activation_functions = [Tanh() for _ in hidden_dims] + [None]
 
-param_desc = '%s-%s-%s' % (repr(hidden_dims), repr(noise_std), 'R' if randomize_feats else '')
+param_desc = '%s-%s-%s-mom%s,%s-i%d' % (repr(hidden_dims),
+                                    repr(noise_std),
+                                    'R' if randomize_feats else '',
+                                    repr(learning_rate),
+                                    repr(momentum),
+                                    ibatchsize)
 
 pt_freq = 11
 
@@ -75,7 +83,7 @@ def construct_model(input_dim, output_dim):
     cg = ComputationGraph([cost, error_rate])
     noise_vars = VariableFilter(roles=[WEIGHT])(cg)
     apply_noise(cg, noise_vars, noise_std)
-    [cost, error_rate] = cg.outputs
+    [cost_reg, error_rate_reg] = cg.outputs
 
-    return cost, error_rate
+    return cost_reg, error_rate_reg, cost, error_rate
 

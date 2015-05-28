@@ -105,6 +105,6 @@ def construct_model(input_dim, out_dim):
     cg = ComputationGraph([cost, error_rate])
     noise_vars = VariableFilter(roles=[WEIGHT])(cg)
     apply_noise(cg, noise_vars, noise_std)
-    [cost, error_rate] = cg.outputs
+    [cost_reg, error_rate_reg] = cg.outputs
 
-    return cost, error_rate
+    return cost_reg, error_rate_reg, cost, error_rate

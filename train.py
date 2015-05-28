@@ -29,10 +29,14 @@ if __name__ == "__main__":
     config = importlib.import_module('%s' % model_name)
 
 
-def train_model(cost, error_rate, train_stream, valid_stream, load_location=None, save_location=None):
+def train_model(cc, train_stream, valid_stream, load_location=None, save_location=None):
+
+    cost_reg, error_rate_reg, cost, error_rate = cc
 
     cost.name = "cross_entropy"
+    cost_reg.name = "cross_entropy"
     error_rate.name = 'error_rate'
+    error_rate_reg.name = 'error_rate'
 
     # Define the model
     model = Model(cost)
@@ -42,8 +46,8 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
         logger.info('Loading parameters...')
         model.set_param_values(load_parameter_values(load_location))
 
-    cg = ComputationGraph(cost)
-    algorithm = GradientDescent(cost=cost, step_rule=config.step_rule,
+    cg = ComputationGraph(cost_reg)
+    algorithm = GradientDescent(cost=cost_reg, step_rule=config.step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
         model=model,
@@ -51,7 +55,7 @@ def train_model(cost, error_rate, train_stream, valid_stream, load_location=None
         algorithm=algorithm,
         extensions=[
             TrainingDataMonitoring(
-                [cost, error_rate], prefix='train', every_n_epochs=1*config.pt_freq),
+                [cost_reg, error_rate_reg], prefix='train', every_n_epochs=1*config.pt_freq),
             DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
@@ -81,8 +85,9 @@ if __name__ == "__main__":
     train_ex = train_stream.dataset.nitems
 
     # Build model
-    cost, error_rate = config.construct_model(train_ex, 2)
+    cc = config.construct_model(train_ex, 2)
 
     # Train the model
-    train_model(cost, error_rate, train_stream, valid_stream,
-                load_location=None, save_location="trained_rnn")
+    saveloc = 'model_data/%s-%s' % (model_name, config.param_desc)
+    train_model(cc, train_stream, valid_stream,
+                load_location=None, save_location=saveloc)

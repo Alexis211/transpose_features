@@ -25,16 +25,14 @@ def batch(items, batch_size):
 
 class NPYTransposeDataset(Dataset):
 
-    def __init__(self, ref_data_x, data, **kwargs):
-        self.ref_data_x = ref_data_x
+    def __init__(self, data, **kwargs):
         self.data_x, self.data_y = data
 
-        self.ref_data_x = self.ref_data_x.astype(numpy.float32)
         self.data_x = self.data_x.astype(numpy.float32)
 
         self.nitems, self.nfeats = self.data_x.shape
 
-        self.provides_sources = ('r', 'x', 'y')
+        self.provides_sources = ('j', 'x', 'y')
 
         super(NPYTransposeDataset, self).__init__(**kwargs)
 
@@ -42,7 +40,7 @@ class NPYTransposeDataset(Dataset):
         if request is None:
             raise ValueError("Expected request: i vector and j vector")
         i_list, j_list = request
-        return (self.ref_data_x[:, j_list].T,
+        return (j_list,
                 self.data_x[:, j_list][i_list, :],
                 self.data_y[i_list])
 
@@ -103,7 +101,11 @@ class LogregOrderTransposeIt(TransposeIt):
         return iter_([(ii, self.js) for ii in ib])
 
 
-def prepare_data(name, iteration_scheme, valid_iteration_scheme, randomize_feats=False):
+def prepare_data(config):
+    name = config.dataset
+    iteration_scheme = config.iter_scheme
+    valid_iteration_scheme = config.valid_iter_scheme
+
     if name == 'ARCENE':
         ds = dataset.load_ARCENE()
     elif name == 'DOROTHEA':
@@ -115,29 +117,43 @@ def prepare_data(name, iteration_scheme, valid_iteration_scheme, randomize_feats
 
     train_set_x, train_set_y, valid_set_x, valid_set_y, test_set_x = ds
 
+    if config.center_feats:
+        means = train_set_x.mean(axis=0, keepdims=True)
+        train_set_x = train_set_x - means
+        valid_set_x = valid_set_x - means
+        test_set_x = test_set_x - means
+
     # Normalize all features according to coefficients given by train_x
-    train_x_norms = numpy.sqrt((train_set_x ** 2).sum(axis=0, keepdims=True))
-    div = train_x_norms + numpy.equal(train_x_norms, 0)
-    train_set_x = train_set_x / div
-    valid_set_x = valid_set_x / div
-    test_set_x = test_set_x / div
+    if config.normalize_feats:
+        train_x_norms = numpy.sqrt((train_set_x ** 2).sum(axis=0, keepdims=True))
+        div = train_x_norms + numpy.equal(train_x_norms, 0)
+        train_set_x = train_set_x / div
+        valid_set_x = valid_set_x / div
+        test_set_x = test_set_x / div
 
     feats = train_set_x
-    if randomize_feats:
+    if config.randomize_feats:
         transform = numpy.random.randn(train_set_x.shape[0], train_set_x.shape[0])
         feats = numpy.dot(transform, feats)
 
-    data_train = NPYTransposeDataset(feats, (train_set_x, train_set_y))
-    data_valid = NPYTransposeDataset(feats, (valid_set_x, valid_set_y))
+    data_train = NPYTransposeDataset((train_set_x, train_set_y))
+    data_valid = NPYTransposeDataset((valid_set_x, valid_set_y))
 
     iteration_scheme.set_dims(data_train.nitems, data_train.nfeats)
     valid_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)
 
     stream_train = DataStream(data_train, iteration_scheme=iteration_scheme)
-    stream_valid = DataStream(
-        data_valid, iteration_scheme=valid_iteration_scheme)
+    stream_valid = DataStream(data_valid, iteration_scheme=valid_iteration_scheme)
 
-    return stream_train, stream_valid
+    if test_set_x != None:
+        data_test = NPYTransposeDataset((test_set_x, None))
+        test_iteration_scheme = RandomTransposeIt(1, False, None, False)
+        test_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)
+        stream_test = DataStream(data_test, test_iteration_scheme)
+    else
+        stream_test = None
+
+    return feats.T, stream_train, stream_valid, stream_test
 
 
 if __name__ == "__main__":

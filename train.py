@@ -29,25 +29,23 @@ if __name__ == "__main__":
     config = importlib.import_module('%s' % model_name)
 
 
-def train_model(cc, train_stream, valid_stream, load_location=None, save_location=None):
+def train_model(m, train_stream, valid_stream, load_location=None, save_location=None):
 
-    cost_reg, error_rate_reg, cost, error_rate = cc
-
-    cost.name = "cross_entropy"
-    cost_reg.name = "cross_entropy"
-    error_rate.name = 'error_rate'
-    error_rate_reg.name = 'error_rate'
+    m.cost.name = "cross_entropy"
+    m.cost_reg.name = "cross_entropy"
+    m.error_rate.name = 'error_rate'
+    m.error_rate_reg.name = 'error_rate'
 
     # Define the model
-    model = Model(cost)
+    model = Model(m.cost)
 
     # Load the parameters from a dumped model
     if load_location is not None:
         logger.info('Loading parameters...')
         model.set_param_values(load_parameter_values(load_location))
 
-    cg = ComputationGraph(cost_reg)
-    algorithm = GradientDescent(cost=cost_reg, step_rule=config.step_rule,
+    cg = ComputationGraph(m.cost_reg)
+    algorithm = GradientDescent(cost=m.cost_reg, step_rule=config.step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
         model=model,
@@ -55,8 +53,8 @@ def train_model(cc, train_stream, valid_stream, load_location=None, save_locatio
         algorithm=algorithm,
         extensions=[
             TrainingDataMonitoring(
-                [cost_reg, error_rate_reg], prefix='train', every_n_epochs=1*config.pt_freq),
-            DataStreamMonitoring([cost, error_rate], valid_stream, prefix='valid',
+                [m.cost_reg, m.error_rate_reg], prefix='train', every_n_epochs=1*config.pt_freq),
+            DataStreamMonitoring([m.cost, m.error_rate], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
             Plot(document='tr_'+model_name+'_'+config.param_desc,
@@ -77,17 +75,16 @@ def train_model(cc, train_stream, valid_stream, load_location=None, save_locatio
 
 if __name__ == "__main__":
     # Build datastream
-    train_stream, valid_stream = prepare_data(config.dataset,
-                                              config.iter_scheme,
-                                              config.valid_iter_scheme,
-                                              randomize_feats=config.randomize_feats)
-
-    train_ex = train_stream.dataset.nitems
+    ref_data, train_stream, valid_stream, test_stream = prepare_data(config)
 
     # Build model
-    cc = config.construct_model(train_ex, 2)
+    m = config.Model(ref_data, 2)
 
     # Train the model
     saveloc = 'model_data/%s-%s' % (model_name, config.param_desc)
-    train_model(cc, train_stream, valid_stream,
+    train_model(m, train_stream, valid_stream,
                 load_location=None, save_location=saveloc)
+
+    # Produce output on test file
+    if test_stream != None:
+        pass # TODO

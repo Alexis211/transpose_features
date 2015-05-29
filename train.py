@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import logging
-import numpy as np
+import numpy
 import sys
 import importlib
 
@@ -17,6 +17,7 @@ from blocks.algorithms import GradientDescent
 from theano import tensor
 
 from datastream import prepare_data
+from apply_model import Apply
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -30,11 +31,6 @@ if __name__ == "__main__":
 
 
 def train_model(m, train_stream, valid_stream, load_location=None, save_location=None):
-
-    m.cost.name = "cross_entropy"
-    m.cost_reg.name = "cross_entropy"
-    m.error_rate.name = 'error_rate'
-    m.error_rate_reg.name = 'error_rate'
 
     # Define the model
     model = Model(m.cost)
@@ -58,8 +54,8 @@ def train_model(m, train_stream, valid_stream, load_location=None, save_location
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
             Plot(document='tr_'+model_name+'_'+config.param_desc,
-                 channels=[['train_cross_entropy', 'valid_cross_entropy'],
-                           ['train_error_rate', 'valid_error_rate']],
+                 channels=[['train_cost_reg', 'valid_cost'],
+                           ['train_error_rate_reg', 'valid_error_rate']],
                  every_n_epochs=1*config.pt_freq, after_epoch=False)
         ]
     )
@@ -79,6 +75,12 @@ if __name__ == "__main__":
 
     # Build model
     m = config.Model(ref_data, 2)
+    m.cost.name = 'cost'
+    m.cost_reg.name = 'cost_reg'
+    m.error_rate.name = 'error_rate'
+    m.error_rate_reg.name = 'error_rate_reg'
+    m.pred.name = 'pred'
+    m.confidence.name = 'confidence'
 
     # Train the model
     saveloc = 'model_data/%s-%s' % (model_name, config.param_desc)
@@ -87,4 +89,7 @@ if __name__ == "__main__":
 
     # Produce output on test file
     if test_stream != None:
-        pass # TODO
+        vec = numpy.zeros((0, 2))
+        for v in Apply([m.pred, m.confidence], ['pred', 'confidence'], test_stream):
+            vec = numpy.concatenate([vec, v['confidence']], axis=0)
+        numpy.savetxt(saveloc+'.predict', vec[:, 1], fmt='%.6e')

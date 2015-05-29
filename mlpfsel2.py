@@ -20,24 +20,26 @@ if step_rule_name == 'adadelta':
 if step_rule_name == 'rmsprop':
     step_rule = RMSProp()
 
-ibatchsize = 100
+ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, True, None, True)
 valid_iter_scheme = iter_scheme
 
-w_noise_std = 1.0
-r_noise_std = 1.0
-r_dropout = 0.2
-s_dropout = 0.9
-i_dropout = 0.9
+w_noise_std = 0.0
+r_noise_std = 0.0
+r_dropout = 0.0
+s_dropout = 0.0
+i_dropout = 0.0
 
 center_feats = True
 normalize_feats = True
 randomize_feats = False
 
-hidden_dims = [70]
+train_on_valid = False
+
+hidden_dims = [10]
 activation_functions = [Tanh() for _ in hidden_dims] + [None]
 
-n_inter = 70
+n_inter = 20
 inter_bias = None   # -5
 inter_act_fun = Tanh()
 
@@ -45,7 +47,7 @@ input_cut_dim = None # 800
 dataset = 'ARCENE'
 pt_freq = 10
 
-param_desc = '%s-%s-%d-%s-n%s,%s-d%s,%s,%s-%s-%s-i%d-cut%s' % (dataset,
+param_desc = '%s-%s-%d-%s-n%s,%s-d%s,%s,%s-%s-%s-i%s-cut%s' % (dataset,
                                     repr(hidden_dims),
                                     n_inter,
                                     repr(inter_bias),
@@ -58,7 +60,7 @@ param_desc = '%s-%s-%d-%s-n%s,%s-d%s,%s,%s-%s-%s-i%d-cut%s' % (dataset,
                                     ('N' if normalize_feats else '') +
                                     ('R' if randomize_feats else ''),
                                     step_rule_name,
-                                    ibatchsize,
+                                    repr(ibatchsize),
                                     repr(input_cut_dim))
 
 
@@ -95,7 +97,8 @@ class Model(object):
 
         final = mlp2.apply(inter)
 
-        cost = Softmax().categorical_cross_entropy(y, final).mean()
+        cost = Softmax().categorical_cross_entropy(y, final)
+        confidence = Softmax().apply(final)
 
         pred = final.argmax(axis=1)
         error_rate = tensor.neq(y, pred).mean()
@@ -116,7 +119,8 @@ class Model(object):
 
         apply_dropout(cg, [inter_weights], r_dropout)
 
-        tmp_output_vars = list(set(VariableFilter(bricks=[Tanh], name='output')(ComputationGraph([inter_weights])))
+        tmp_output_vars = list(set(VariableFilter(bricks=[Tanh], name='output')
+                                                 (ComputationGraph([inter_weights])))
                              - set([inter_weights]))
         print 'dropout', s_dropout, 'on', tmp_output_vars
         apply_dropout(cg, tmp_output_vars, s_dropout)
@@ -130,4 +134,5 @@ class Model(object):
         self.error_rate = error_rate
         self.error_rate_reg = error_rate_reg
         self.pred = pred
+        self.confidence = confidence
 

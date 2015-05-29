@@ -10,6 +10,8 @@ from fuel.datasets import Dataset
 from fuel.streams import DataStream
 from fuel.schemes import IterationScheme
 
+import sys
+
 import dataset
 
 logging.basicConfig(level='INFO')
@@ -25,14 +27,16 @@ def batch(items, batch_size):
 
 class NPYTransposeDataset(Dataset):
 
-    def __init__(self, data, **kwargs):
-        self.data_x, self.data_y = data
-
-        self.data_x = self.data_x.astype(numpy.float32)
+    def __init__(self, data_x, data_y=None, **kwargs):
+        self.data_x = data_x.astype(numpy.float32)
+        self.data_y = data_y
 
         self.nitems, self.nfeats = self.data_x.shape
 
-        self.provides_sources = ('j', 'x', 'y')
+        if self.data_y != None:
+            self.provides_sources = ('j', 'x', 'y')
+        else:
+            self.provides_sources = ('j', 'x')
 
         super(NPYTransposeDataset, self).__init__(**kwargs)
 
@@ -40,9 +44,13 @@ class NPYTransposeDataset(Dataset):
         if request is None:
             raise ValueError("Expected request: i vector and j vector")
         i_list, j_list = request
-        return (j_list,
-                self.data_x[:, j_list][i_list, :],
-                self.data_y[i_list])
+        if self.data_y != None:
+            return (j_list,
+                    self.data_x[:, j_list][i_list, :],
+                    self.data_y[i_list])
+        else:
+            return (j_list,
+                    self.data_x[:, j_list][i_list, :])
 
 
 class TransposeIt(IterationScheme):
@@ -121,7 +129,8 @@ def prepare_data(config):
         means = train_set_x.mean(axis=0, keepdims=True)
         train_set_x = train_set_x - means
         valid_set_x = valid_set_x - means
-        test_set_x = test_set_x - means
+        if test_set_x != None:
+            test_set_x = test_set_x - means
 
     # Normalize all features according to coefficients given by train_x
     if config.normalize_feats:
@@ -129,28 +138,32 @@ def prepare_data(config):
         div = train_x_norms + numpy.equal(train_x_norms, 0)
         train_set_x = train_set_x / div
         valid_set_x = valid_set_x / div
-        test_set_x = test_set_x / div
+        if test_set_x != None:
+            test_set_x = test_set_x / div
 
     feats = train_set_x
     if config.randomize_feats:
         transform = numpy.random.randn(train_set_x.shape[0], train_set_x.shape[0])
         feats = numpy.dot(transform, feats)
 
-    data_train = NPYTransposeDataset((train_set_x, train_set_y))
-    data_valid = NPYTransposeDataset((valid_set_x, valid_set_y))
+    if config.train_on_valid:
+        train_set_x = numpy.concatenate([train_set_x, valid_set_x], axis=0)
+        train_set_y = numpy.concatenate([train_set_y, valid_set_y], axis=0)
 
+    data_train = NPYTransposeDataset(train_set_x, train_set_y)
     iteration_scheme.set_dims(data_train.nitems, data_train.nfeats)
-    valid_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)
-
     stream_train = DataStream(data_train, iteration_scheme=iteration_scheme)
+
+    data_valid = NPYTransposeDataset(valid_set_x, valid_set_y)
+    valid_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)
     stream_valid = DataStream(data_valid, iteration_scheme=valid_iteration_scheme)
 
     if test_set_x != None:
-        data_test = NPYTransposeDataset((test_set_x, None))
-        test_iteration_scheme = RandomTransposeIt(1, False, None, False)
-        test_iteration_scheme.set_dims(data_valid.nitems, data_valid.nfeats)
-        stream_test = DataStream(data_test, test_iteration_scheme)
-    else
+        data_test = NPYTransposeDataset(test_set_x)
+        test_iteration_scheme = RandomTransposeIt(100, False, None, False)
+        test_iteration_scheme.set_dims(data_test.nitems, data_test.nfeats)
+        stream_test = DataStream(data_test, iteration_scheme=test_iteration_scheme)
+    else:
         stream_test = None
 
     return feats.T, stream_train, stream_valid, stream_test

@@ -31,10 +31,10 @@ iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
 w_noise_std = 0.05
-r_dropout = 0.5
-s_dropout = 0.95
-i_dropout = 0.95
-a_dropout = 0.95
+r_dropout = 0.0
+s_dropout = 0.0
+i_dropout = 0.0
+a_dropout = 0.0
 
 center_feats = True
 normalize_feats = True
@@ -42,12 +42,12 @@ randomize_feats = False
 
 train_on_valid = False
 
-hidden_dims = [100, 100]
+hidden_dims = [4, 4, 4]
 activation_functions = [Tanh() for _ in hidden_dims] + [None]
-hidden_dims_2 = [100, 100]
+hidden_dims_2 = [4, 4]
 activation_functions_2 = [Tanh() for _ in hidden_dims_2]
 
-n_inter = 100
+n_inter = 4
 inter_bias = None   # -5
 inter_act_fun = Tanh()
 
@@ -120,26 +120,32 @@ class Model(object):
         # apply regularization
         cg = ComputationGraph([cost, error_rate])
 
-        # - dropout on input vector r : r_dropout
-        cg = apply_dropout(cg, [r], r_dropout)
+        if r_dropout != 0:
+            # - dropout on input vector r : r_dropout
+            cg = apply_dropout(cg, [r], r_dropout)
 
-        # - dropout on intermediate layers of first mlp : s_dropout
-        s_dropout_vars = list(set(VariableFilter(bricks=[Tanh], name='output')
-                                                 (ComputationGraph([inter_weights])))
-                             - set([inter_weights]))
-        cg = apply_dropout(cg, s_dropout_vars, s_dropout)
+        if s_dropout != 0:
+            # - dropout on intermediate layers of first mlp : s_dropout
+            s_dropout_vars = list(set(VariableFilter(bricks=[Tanh], name='output')
+                                                     (ComputationGraph([inter_weights])))
+                                 - set([inter_weights]))
+            cg = apply_dropout(cg, s_dropout_vars, s_dropout)
 
-        # - dropout on input to second mlp : i_dropout
-        cg = apply_dropout(cg, [inter], i_dropout)
+        if i_dropout != 0:
+            # - dropout on input to second mlp : i_dropout
+            cg = apply_dropout(cg, [inter], i_dropout)
 
-        # - dropout on hidden layers of second mlp : a_dropout
-        a_dropout_vars = list(set(VariableFilter(bricks=[Tanh], name='output')
-                                                 (ComputationGraph([final])))
-                             - set([inter_weights]) - set(s_dropout_vars))
-        cg = apply_dropout(cg, a_dropout_vars, a_dropout)
+        if a_dropout != 0:
+            # - dropout on hidden layers of second mlp : a_dropout
+            a_dropout_vars = list(set(VariableFilter(bricks=[Tanh], name='output')
+                                                     (ComputationGraph([final])))
+                                 - set([inter_weights]) - set(s_dropout_vars))
+            cg = apply_dropout(cg, a_dropout_vars, a_dropout)
 
-        weght_vars = VariableFilter(roles=[WEIGHT])(cg)
-        cg = apply_noise(cg, weight_vars, w_noise_std)
+        if w_noise_std != 0:
+            # - apply noise on weight variables
+            weight_vars = VariableFilter(roles=[WEIGHT])(cg)
+            cg = apply_noise(cg, weight_vars, w_noise_std)
 
         [cost_reg, error_rate_reg] = cg.outputs
 

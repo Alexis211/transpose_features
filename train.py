@@ -54,8 +54,8 @@ def train_model(m, train_stream, valid_stream, load_location=None, save_location
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
             Plot(document='tr_'+model_name+'_'+config.param_desc,
-                 channels=[['train_cost_reg', 'valid_cost'],
-                           ['train_error_rate_reg', 'valid_error_rate']],
+                 channels=[['train_cost_reg', 'valid_cost', 'valid_cost_reg'],
+                           ['train_error_rate_reg', 'valid_error_rate', 'valid_error_rate_reg']],
                  every_n_epochs=1*config.pt_freq, after_epoch=False)
         ]
     )
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     # Train the model
     saveloc = 'model_data/%s-%s' % (model_name, config.param_desc)
     train_model(m, train_stream, valid_stream,
-                load_location=None, save_location=saveloc)
+                load_location=None, save_location=None)
 
     # Produce output on test file
     if test_stream != None:

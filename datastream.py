@@ -118,6 +118,8 @@ def prepare_data(config):
         ds = dataset.load_ARCENE()
     elif name == 'DOROTHEA':
         ds = dataset.load_DOROTHEA()
+    elif name == 'GISETTE':
+        ds = dataset.load_GISETTE()
     elif name == 'AMLALL':
         ds = dataset.load_AMLALL()
     else:

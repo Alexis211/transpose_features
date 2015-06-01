@@ -27,9 +27,6 @@ def load_AMLALL(train_set_size=55):
 
 
 def load_ARCENE():
-    with open('data/arcene_full.pkl') as fh:
-        fulldata = cPickle.load(fh)
-
     train_x = numpy.loadtxt('data/nips03/ARCENE/arcene_train.data')
     train_y = numpy.equal(numpy.loadtxt('data/nips03/ARCENE/arcene_train.labels'), 1)
 
@@ -39,7 +36,6 @@ def load_ARCENE():
     test_x = numpy.loadtxt('data/nips03/ARCENE/arcene_test.data')
 
     return train_x, train_y, valid_x, valid_y, test_x
-
 
 def load_DOROTHEA():
     ntrain = 800
@@ -65,3 +61,15 @@ def load_DOROTHEA():
     test_x = do_x('data/nips03/DOROTHEA/dorothea_test.data', ntest)
 
     return train_x, train_y, valid_x, valid_y, test_x
+
+def load_GISETTE():
+    train_x = numpy.loadtxt('data/nips03/GISETTE/gisette_train.data')
+    train_y = numpy.equal(numpy.loadtxt('data/nips03/GISETTE/gisette_train.labels'), 1)
+
+    valid_x = numpy.loadtxt('data/nips03/GISETTE/gisette_valid.data')
+    valid_y = numpy.equal(numpy.loadtxt('data/nips03/gisette_valid.labels'), 1)
+
+    test_x = numpy.loadtxt('data/nips03/GISETTE/gisette_test.data')
+
+    return train_x, train_y, valid_x, valid_y, test_x
+

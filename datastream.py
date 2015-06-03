@@ -83,7 +83,7 @@ class RandomTransposeIt(TransposeIt):
 
         return iter_([(ii, jj) for ii in ib for jj in jb])
 
-
+'''
 class LogregOrderTransposeIt(TransposeIt):
 
     def __init__(self, ibatchsize, irandom, jlogregparamfile, jcount):
@@ -107,6 +107,7 @@ class LogregOrderTransposeIt(TransposeIt):
         ib = batch(i, self.ibatchsize)
 
         return iter_([(ii, self.js) for ii in ib])
+'''
 
 
 def prepare_data(config):
@@ -127,6 +128,7 @@ def prepare_data(config):
 
     train_set_x, train_set_y, valid_set_x, valid_set_y, test_set_x = ds
 
+    # Center all features around the mean given by train_x
     if config.center_feats:
         means = train_set_x.mean(axis=0, keepdims=True)
         train_set_x = train_set_x - means

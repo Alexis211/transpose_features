@@ -30,24 +30,24 @@ ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
-w_noise_std = 0.05
+w_noise_std = 0.01
 r_dropout = 0.0
 s_dropout = 0.0
 i_dropout = 0.0
 a_dropout = 0.0
 
-center_feats = True
+center_feats = False
 normalize_feats = True
 randomize_feats = False
 
 train_on_valid = False
 
-hidden_dims = [4, 4, 4]
+hidden_dims = [40, 40]
 activation_functions = [Tanh() for _ in hidden_dims] + [None]
-hidden_dims_2 = [4, 4]
+hidden_dims_2 = [40]
 activation_functions_2 = [Tanh() for _ in hidden_dims_2]
 
-n_inter = 4
+n_inter = 40
 inter_bias = None   # -5
 inter_act_fun = Tanh()
 

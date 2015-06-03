@@ -49,13 +49,14 @@ def train_model(m, train_stream, valid_stream, load_location=None, save_location
         algorithm=algorithm,
         extensions=[
             TrainingDataMonitoring(
-                [m.cost_reg, m.error_rate_reg], prefix='train', every_n_epochs=1*config.pt_freq),
+                [m.cost_reg, m.error_rate_reg, m.cost, m.error_rate],
+                prefix='train', every_n_epochs=1*config.pt_freq),
             DataStreamMonitoring([m.cost, m.error_rate], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
             Plot(document='tr_'+model_name+'_'+config.param_desc,
-                 channels=[['train_cost_reg', 'valid_cost', 'valid_cost_reg'],
-                           ['train_error_rate_reg', 'valid_error_rate', 'valid_error_rate_reg']],
+                 channels=[['train_cost', 'train_cost_reg', 'valid_cost'],
+                           ['train_error_rate', 'train_error_rate_reg', 'valid_error_rate']],
                  every_n_epochs=1*config.pt_freq, after_epoch=False)
         ]
     )

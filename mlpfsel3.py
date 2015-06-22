@@ -2,7 +2,7 @@ from theano import tensor
 import theano
 import numpy
 
-from blocks.algorithms import Momentum, AdaDelta, RMSProp
+from blocks.algorithms import Momentum, AdaDelta, RMSProp, Adam
 from blocks.bricks import Rectifier, MLP, Softmax, Tanh, Bias
 from blocks.initialization import IsotropicGaussian, Constant
 
@@ -12,7 +12,7 @@ from blocks.graph import ComputationGraph, apply_noise, apply_dropout
 
 from datastream import RandomTransposeIt
 
-step_rule_name = 'adadelta'
+step_rule_name = 'adam'
 learning_rate = 0.1
 momentum = 0.9
 
@@ -23,6 +23,8 @@ elif step_rule_name == 'rmsprop':
 elif step_rule_name == 'momentum':
     step_rule_name = "mom%s,%s" % (repr(learning_rate), repr(momentum))
     step_rule = Momentum(learning_rate=learning_rate, momentum=momentum)
+elif step_rule_name == 'adam':
+    step_rule = Adam()
 else:
     raise ValueError("No such step rule: " + step_rule_name)
 
@@ -30,10 +32,10 @@ ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
-w_noise_std = 0.01
-r_dropout = 0.5
+w_noise_std = 0.05
+r_dropout = 0.0
 s_dropout = 0.0
-i_dropout = 0.5
+i_dropout = 0.0
 a_dropout = 0.0
 
 center_feats = True
@@ -51,7 +53,7 @@ activation_functions_1 = [Tanh() for _ in hidden_dims_1] + [None]
 hidden_dims_2 = []
 activation_functions_2 = [Tanh() for _ in hidden_dims_2]
 
-n_inter = 8
+n_inter = 2
 inter_act_fun = Tanh()
 
 dataset = 'ARCENE'

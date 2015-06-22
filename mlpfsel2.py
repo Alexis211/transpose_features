@@ -12,6 +12,8 @@ from blocks.graph import ComputationGraph, apply_noise, apply_dropout
 
 from datastream import RandomTransposeIt
 
+import ber as balanced_error_rate
+
 step_rule_name = 'adadelta'
 learning_rate = 0.1
 momentum = 0.9
@@ -30,40 +32,55 @@ ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
-w_noise_std = 0.01
+r_noise_std = 0.01
+w_noise_std = 0.00
 r_dropout = 0.0
+x_dropout = 0.0
 s_dropout = 0.0
 i_dropout = 0.0
 a_dropout = 0.0
 
-center_feats = False
+s_l1pen = 0.02
+i_l1pen = 0.001
+a_l1pen = 0.000
+
+pca_dims = 100
+
+eq_reg_cost = 0
+eq_reg_val = -4 # 0.3
+
+center_feats = True
 normalize_feats = True
 randomize_feats = False
 
 train_on_valid = False
 
-hidden_dims = [40, 40]
+hidden_dims = []
 activation_functions = [Tanh() for _ in hidden_dims] + [None]
-hidden_dims_2 = [40]
+hidden_dims_2 = []
 activation_functions_2 = [Tanh() for _ in hidden_dims_2]
 
-n_inter = 40
+n_inter = 10
 inter_bias = None   # -5
 inter_act_fun = Tanh()
 
 dataset = 'ARCENE'
 pt_freq = 10
 
-param_desc = '%s-%s,%d,%s-%s-n%s-d%s,%s,%s,%s-%s-%s-i%s' % (dataset,
+param_desc = '%s-%s,%d,%s-%s-n%s,%s-d%s,%s,%s,%s,%s-L1:%s,%s,%s-PCA%s-r%sto%s-%s-%s-i%s' % (dataset,
                                     repr(hidden_dims),
                                     n_inter,
                                     repr(hidden_dims_2),
                                     repr(inter_bias),
-                                    repr(w_noise_std),
+                                    repr(r_noise_std), repr(w_noise_std),
                                     repr(r_dropout),
+                                    repr(x_dropout),
                                     repr(s_dropout),
                                     repr(i_dropout),
                                     repr(a_dropout),
+                                    repr(s_l1pen), repr(i_l1pen), repr(a_l1pen),
+                                    repr(pca_dims),
+                                    repr(eq_reg_cost), repr(eq_reg_val),
                                     ('C' if center_feats else'') +
                                     ('N' if normalize_feats else '') +
                                     ('W' if train_on_valid else '') +
@@ -75,6 +92,14 @@ param_desc = '%s-%s,%d,%s-%s-n%s-d%s,%s,%s,%s-%s-%s-i%s' % (dataset,
 
 class Model(object):
     def __init__(self, ref_data, output_dim):
+        if pca_dims is not None:
+            covmat = numpy.dot(ref_data.T, ref_data)
+            ev, evec = numpy.linalg.eig(covmat)
+            best_i = ev.argsort()[-pca_dims:]
+            best_evecs = evec[:, best_i]
+            best_evecs = best_evecs / numpy.sqrt((best_evecs**2).sum(axis=0)) #normalize
+            ref_data = numpy.dot(ref_data, best_evecs)
+
         input_dim = ref_data.shape[1]
 
         ref_data_sh = theano.shared(numpy.array(ref_data, dtype=numpy.float32), name='ref_data')
@@ -109,7 +134,8 @@ class Model(object):
         confidence = Softmax().apply(final)
 
         pred = final.argmax(axis=1)
-        error_rate = tensor.neq(y, pred).mean()
+        # error_rate = tensor.neq(y, pred).mean()
+        ber = balanced_error_rate.ber(y, pred)
 
         # Initialize parameters
         for brick in [mlp, mlp2]:
@@ -118,11 +144,14 @@ class Model(object):
             brick.initialize()
 
         # apply regularization
-        cg = ComputationGraph([cost, error_rate])
+        cg = ComputationGraph([cost, ber])
 
         if r_dropout != 0:
             # - dropout on input vector r : r_dropout
             cg = apply_dropout(cg, [r], r_dropout)
+
+        if x_dropout != 0:
+            cg = apply_dropout(cg, [x], x_dropout)
 
         if s_dropout != 0:
             # - dropout on intermediate layers of first mlp : s_dropout
@@ -142,17 +171,37 @@ class Model(object):
                                  - set([inter_weights]) - set(s_dropout_vars))
             cg = apply_dropout(cg, a_dropout_vars, a_dropout)
 
+        if r_noise_std != 0:
+            cg = apply_noise(cg, [r], r_noise_std)
+
         if w_noise_std != 0:
             # - apply noise on weight variables
             weight_vars = VariableFilter(roles=[WEIGHT])(cg)
             cg = apply_noise(cg, weight_vars, w_noise_std)
 
-        [cost_reg, error_rate_reg] = cg.outputs
+        [cost_reg, ber_reg] = cg.outputs
+        
+        if s_l1pen != 0:
+            s_weights = VariableFilter(bricks=mlp.linear_transformations, roles=[WEIGHT])(cg)
+            cost_reg = cost_reg + s_l1pen * sum(abs(w).sum() for w in s_weights)
+        if i_l1pen != 0:
+            cost_reg = cost_reg + i_l1pen * abs(inter).sum()
+        if a_l1pen != 0:
+            a_weights = VariableFilter(bricks=mlp2.linear_transformations, roles=[WEIGHT])(cg)
+            cost_reg = cost_reg + a_l1pen * sum(abs(w).sum() for w in a_weights)
+
+        if eq_reg_cost != 0:
+            # add all-to-1 cost
+            if eq_reg_val > 0:
+                eq_reg = (eq_reg_val - abs(inter)) ** 2 
+            else:
+                eq_reg = inter ** (-eq_reg_val)
+            cost_reg = cost_reg + eq_reg_cost * eq_reg.mean()
 
         self.cost = cost
         self.cost_reg = cost_reg
-        self.error_rate = error_rate
-        self.error_rate_reg = error_rate_reg
+        self.ber = ber
+        self.ber_reg = ber_reg
         self.pred = pred
         self.confidence = confidence
 

@@ -5,11 +5,11 @@ import numpy
 import sys
 import importlib
 
-from blocks.dump import load_parameter_values
-from blocks.dump import MainLoopDumpManager
+# from blocks.dump import load_parameter_values
+# from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
 from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
-from blocks.extensions.plot import Plot
+from blocks.extras.extensions.plot import Plot
 from blocks.graph import ComputationGraph
 from blocks.main_loop import MainLoop
 from blocks.model import Model
@@ -33,12 +33,14 @@ if __name__ == "__main__":
 def train_model(m, train_stream, valid_stream, load_location=None, save_location=None):
 
     # Define the model
-    model = Model(m.cost)
+    model = Model(m.cost_reg)
 
+    '''
     # Load the parameters from a dumped model
     if load_location is not None:
         logger.info('Loading parameters...')
         model.set_param_values(load_parameter_values(load_location))
+    '''
 
     cg = ComputationGraph(m.cost_reg)
     algorithm = GradientDescent(cost=m.cost_reg, step_rule=config.step_rule,
@@ -49,25 +51,28 @@ def train_model(m, train_stream, valid_stream, load_location=None, save_location
         algorithm=algorithm,
         extensions=[
             TrainingDataMonitoring(
-                [m.cost_reg, m.error_rate_reg, m.cost, m.error_rate],
+                [m.cost_reg, m.ber_reg, m.cost, m.ber],
                 prefix='train', every_n_epochs=1*config.pt_freq),
-            DataStreamMonitoring([m.cost, m.error_rate], valid_stream, prefix='valid',
+            DataStreamMonitoring([m.cost, m.ber], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
             Plot(document='tr_'+model_name+'_'+config.param_desc,
                  channels=[['train_cost', 'train_cost_reg', 'valid_cost'],
-                           ['train_error_rate', 'train_error_rate_reg', 'valid_error_rate']],
+                           ['train_ber', 'train_ber_reg', 'valid_ber']],
+                 server_url='http://eos21:4201',
                  every_n_epochs=1*config.pt_freq, after_epoch=False)
         ]
     )
     main_loop.run()
 
+    '''
     # Save the main loop
     if save_location is not None:
         logger.info('Saving the main loop...')
         dump_manager = MainLoopDumpManager(save_location)
         dump_manager.dump(main_loop)
         logger.info('Saved')
+    '''
 
 
 if __name__ == "__main__":
@@ -78,8 +83,8 @@ if __name__ == "__main__":
     m = config.Model(ref_data, 2)
     m.cost.name = 'cost'
     m.cost_reg.name = 'cost_reg'
-    m.error_rate.name = 'error_rate'
-    m.error_rate_reg.name = 'error_rate_reg'
+    m.ber.name = 'ber'
+    m.ber_reg.name = 'ber_reg'
     m.pred.name = 'pred'
     m.confidence.name = 'confidence'
 

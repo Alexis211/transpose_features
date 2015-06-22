@@ -2,7 +2,7 @@ from theano import tensor
 import theano
 import numpy
 
-from blocks.algorithms import Momentum, AdaDelta, RMSProp
+from blocks.algorithms import Momentum, AdaDelta, RMSProp, Adam
 from blocks.bricks import Rectifier, MLP, Softmax, Tanh, Bias
 from blocks.initialization import IsotropicGaussian, Constant
 
@@ -12,7 +12,7 @@ from blocks.graph import ComputationGraph, apply_noise, apply_dropout
 
 from datastream import RandomTransposeIt
 
-step_rule_name = 'adadelta'
+step_rule_name = 'rmsprop'
 learning_rate = 0.1
 momentum = 0.9
 
@@ -23,6 +23,8 @@ elif step_rule_name == 'rmsprop':
 elif step_rule_name == 'momentum':
     step_rule_name = "mom%s,%s" % (repr(learning_rate), repr(momentum))
     step_rule = Momentum(learning_rate=learning_rate, momentum=momentum)
+elif step_rule_name == 'adam':
+    step_rule = Adam()
 else:
     raise ValueError("No such step rule: " + step_rule_name)
 
@@ -30,14 +32,14 @@ ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
-w_noise_std = 0.01
+w_noise_std = 0.03
 
-r_dropout = 0.5
+r_dropout = 0.0
 s_dropout = 0.0
 i_dropout = 0.5
 
-nparts = 15
-part_r_proba = 0.3
+nparts = 10
+part_r_proba = 0.4
 
 reconstruction_penalty = 1
 
@@ -162,7 +164,7 @@ class Model(object):
 
         [cost_reg, error_rate_reg] = cg.outputs
 
-        cost_reg = cost_reg + reconstruction_penalty * tensor.concatenate(penalties, axis=0).mean()
+        cost_reg = cost_reg + reconstruction_penalty * tensor.concatenate(penalties, axis=0).sum()
 
         self.cost = cost
         self.cost_reg = cost_reg

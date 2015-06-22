@@ -12,6 +12,8 @@ from blocks.graph import ComputationGraph, apply_noise, apply_dropout
 
 from datastream import RandomTransposeIt
 
+import ber as balanced_error_rate
+
 step_rule_name = 'adadelta'
 learning_rate = 0.1
 momentum = 0.9
@@ -30,14 +32,16 @@ ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
-w_noise_std = 0.01
+r_noise_std = 0.01
+w_noise_std = 0.00
 
-r_dropout = 0.5
+r_dropout = 0.95
+x_dropout = 0.95
 s_dropout = 0.0
 i_dropout = 0.0
 
-nparts = 15
-part_r_proba = 0.3
+nparts = 5
+part_r_proba = 0.5
 
 center_feats = True
 normalize_feats = True
@@ -45,25 +49,25 @@ randomize_feats = False
 
 train_on_valid = False
 
-hidden_dims = [4]
+hidden_dims = []
 activation_functions = [Tanh() for _ in hidden_dims] + [None]
 hidden_dims_2 = []
 activation_functions_2 = [Tanh() for _ in hidden_dims_2]
 
-n_inter = 10
+n_inter = 3
 inter_act_fun = Tanh()
 
 dataset = 'ARCENE'
 pt_freq = 10
 
-param_desc = '%s-%s,%d,%s-%dp%s-n%s-d%s,%s,%s-%s-%s-i%s' % (dataset,
+param_desc = '%s-%s,%d,%s-%dp%s-n%s,%s-d%s,%s,%s,%s-%s-%s-i%s' % (dataset,
                                     repr(hidden_dims),
                                     n_inter,
                                     repr(hidden_dims_2),
                                     nparts,
                                     repr(part_r_proba),
-                                    repr(w_noise_std),
-                                    repr(r_dropout), repr(s_dropout), repr(i_dropout),
+                                    repr(r_noise_std), repr(w_noise_std),
+                                    repr(r_dropout), repr(x_dropout), repr(s_dropout), repr(i_dropout),
                                     ('C' if center_feats else'') +
                                     ('N' if normalize_feats else '') +
                                     ('W' if train_on_valid else '') +
@@ -123,17 +127,20 @@ class Model(object):
                 brick.biases_init = Constant(0.001)
                 brick.initialize()
 
-        final = tensor.concatenate([x[:, :, None] for x in last_outputs], axis=2).mean(axis=2)
+        final = tensor.concatenate([o[:, :, None] for o in last_outputs], axis=2).mean(axis=2)
 
         cost = Softmax().categorical_cross_entropy(y, final)
         confidence = Softmax().apply(final)
 
         pred = final.argmax(axis=1)
-        error_rate = tensor.neq(y, pred).mean()
+        # error_rate = tensor.neq(y, pred).mean()
+        ber = balanced_error_rate.ber(y, pred)
 
         # apply regularization
-        cg = ComputationGraph([cost, error_rate])
+        cg = ComputationGraph([cost, ber])
 
+        if r_noise_std != 0:
+            cg = apply_noise(cg, r_dropout_vars, r_noise_std)
         if w_noise_std != 0:
             # - apply noise on weight variables
             weight_vars = VariableFilter(roles=[WEIGHT])(cg)
@@ -141,17 +148,19 @@ class Model(object):
 
         if s_dropout != 0:
             cg = apply_dropout(cg, s_dropout_vars, s_dropout)
+        if x_dropout != 0:
+            cg = apply_dropout(cg, [x], x_dropout)
         if r_dropout != 0:
             cg = apply_dropout(cg, r_dropout_vars, r_dropout)
         if i_dropout != 0:
             cg = apply_dropout(cg, i_dropout_vars, i_dropout)
 
-        [cost_reg, error_rate_reg] = cg.outputs
+        [cost_reg, ber_reg] = cg.outputs
 
         self.cost = cost
         self.cost_reg = cost_reg
-        self.error_rate = error_rate
-        self.error_rate_reg = error_rate_reg
+        self.ber = ber
+        self.ber_reg = ber_reg
         self.pred = pred
         self.confidence = confidence
 

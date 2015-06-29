@@ -9,6 +9,7 @@ from picklable_itertools import iter_
 from fuel.datasets import Dataset
 from fuel.streams import DataStream
 from fuel.schemes import IterationScheme
+from fuel.transformers import Transformer
 
 import sys
 
@@ -109,6 +110,13 @@ class LogregOrderTransposeIt(TransposeIt):
         return iter_([(ii, self.js) for ii in ib])
 '''
 
+class NoData(Transformer):
+    def __init__(self, stream, **kwargs):
+        super(NoData, self).__init__(stream, **kwargs)
+        self.sources = tuple([])
+    def get_data(self, request=None):
+        data = next(self.child_epoch_iterator)
+        return tuple([])
 
 def prepare_data(config):
     name = config.dataset

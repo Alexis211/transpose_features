@@ -7,7 +7,7 @@ import importlib
 
 # from blocks.dump import load_parameter_values
 # from blocks.dump import MainLoopDumpManager
-from blocks.extensions import Printing
+from blocks.extensions import Printing, FinishAfter
 from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
 from blocks.extras.extensions.plot import Plot
 from blocks.graph import ComputationGraph
@@ -16,7 +16,7 @@ from blocks.model import Model
 from blocks.algorithms import GradientDescent
 from theano import tensor
 
-from datastream import prepare_data
+from datastream import prepare_data, NoData
 from apply_model import Apply
 
 logging.basicConfig(level='INFO')
@@ -30,21 +30,39 @@ if __name__ == "__main__":
     config = importlib.import_module('%s' % model_name)
 
 
+
 def train_model(m, train_stream, valid_stream, load_location=None, save_location=None):
 
     # Define the model
     model = Model(m.cost_reg)
 
-    '''
-    # Load the parameters from a dumped model
-    if load_location is not None:
-        logger.info('Loading parameters...')
-        model.set_param_values(load_parameter_values(load_location))
-    '''
+    ae_excl_vars = set()
+    if hasattr(m, 'ae_costs'):
+        for i, cost in enumerate(m.ae_costs):
+            print "Trianing stacked AE layer", i+1
+            # train autoencoder component separately
+            cost.name = 'ae_cost%d'%i
+
+            cg = ComputationGraph(cost)
+            params = set(cg.parameters) - ae_excl_vars
+            ae_excl_vars = ae_excl_vars | params
+
+            algorithm = GradientDescent(cost=cost, step_rule=config.step_rule, params=list(params))
+            main_loop = MainLoop(
+                data_stream=NoData(train_stream),
+                algorithm=algorithm,
+                extensions=[
+                    TrainingDataMonitoring([cost], prefix='train', every_n_epochs=1),
+                    Printing(every_n_epochs=1),
+                    FinishAfter(every_n_epochs=1000),
+                ]
+            )
+            main_loop.run()
 
     cg = ComputationGraph(m.cost_reg)
+    params = list(set(cg.parameters) - ae_excl_vars)
     algorithm = GradientDescent(cost=m.cost_reg, step_rule=config.step_rule,
-                                params=cg.parameters)
+                                params=params)
     main_loop = MainLoop(
         model=model,
         data_stream=train_stream,
@@ -55,24 +73,18 @@ def train_model(m, train_stream, valid_stream, load_location=None, save_location
                 prefix='train', every_n_epochs=1*config.pt_freq),
             DataStreamMonitoring([m.cost, m.ber], valid_stream, prefix='valid',
                                  after_epoch=False, every_n_epochs=5*config.pt_freq),
+
             Printing(every_n_epochs=1*config.pt_freq, after_epoch=False),
             Plot(document='tr_'+model_name+'_'+config.param_desc,
                  channels=[['train_cost', 'train_cost_reg', 'valid_cost'],
                            ['train_ber', 'train_ber_reg', 'valid_ber']],
                  server_url='http://eos21:4201',
-                 every_n_epochs=1*config.pt_freq, after_epoch=False)
+                 every_n_epochs=1*config.pt_freq, after_epoch=False),
+
+            FinishAfter(every_n_epochs=10000)
         ]
     )
     main_loop.run()
-
-    '''
-    # Save the main loop
-    if save_location is not None:
-        logger.info('Saving the main loop...')
-        dump_manager = MainLoopDumpManager(save_location)
-        dump_manager.dump(main_loop)
-        logger.info('Saved')
-    '''
 
 
 if __name__ == "__main__":

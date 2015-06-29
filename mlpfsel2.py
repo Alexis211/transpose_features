@@ -3,7 +3,7 @@ import theano
 import numpy
 
 from blocks.algorithms import Momentum, AdaDelta, RMSProp
-from blocks.bricks import Rectifier, MLP, Softmax, Tanh, Bias
+from blocks.bricks import Rectifier, MLP, Softmax, Tanh, Bias, Activation, application
 from blocks.initialization import IsotropicGaussian, Constant
 
 from blocks.filter import VariableFilter
@@ -14,12 +14,21 @@ from datastream import RandomTransposeIt
 
 import ber as balanced_error_rate
 
+class BidirRectifier(Activation):
+    @application(inputs=['input_'], outputs=['output'])
+    def apply(self, input_):
+        a = input_ - numpy.float32(1)
+        b = input_ + numpy.float32(1)
+        return tensor.switch(tensor.ge(a, 0), a, 0) + tensor.switch(tensor.le(b, 0), b, 0)
+
 step_rule_name = 'adadelta'
 learning_rate = 0.1
 momentum = 0.9
+decay_rate = 0.5
 
 if step_rule_name == 'adadelta':
-    step_rule = AdaDelta()
+    step_rule = AdaDelta(decay_rate=decay_rate)
+    step_rule_name = 'adadelta%s'%repr(decay_rate)
 elif step_rule_name == 'rmsprop':
     step_rule = RMSProp()
 elif step_rule_name == 'momentum':
@@ -32,7 +41,7 @@ ibatchsize = None
 iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 valid_iter_scheme = RandomTransposeIt(ibatchsize, False, None, False)
 
-r_noise_std = 0.01
+r_noise_std = 0.011
 w_noise_std = 0.00
 r_dropout = 0.0
 x_dropout = 0.0
@@ -41,13 +50,10 @@ i_dropout = 0.0
 a_dropout = 0.0
 
 s_l1pen = 0.02
-i_l1pen = 0.001
+i_l1pen = 0.000
 a_l1pen = 0.000
 
 pca_dims = 100
-
-eq_reg_cost = 0
-eq_reg_val = -4 # 0.3
 
 center_feats = True
 normalize_feats = True
@@ -55,19 +61,19 @@ randomize_feats = False
 
 train_on_valid = False
 
-hidden_dims = []
-activation_functions = [Tanh() for _ in hidden_dims] + [None]
+hidden_dims = [10]
+activation_functions = [BidirRectifier() for _ in hidden_dims] + [None]
 hidden_dims_2 = []
 activation_functions_2 = [Tanh() for _ in hidden_dims_2]
 
 n_inter = 10
 inter_bias = None   # -5
-inter_act_fun = Tanh()
+inter_act_fun = BidirRectifier()
 
 dataset = 'ARCENE'
 pt_freq = 10
 
-param_desc = '%s-%s,%d,%s-%s-n%s,%s-d%s,%s,%s,%s,%s-L1:%s,%s,%s-PCA%s-r%sto%s-%s-%s-i%s' % (dataset,
+param_desc = '%s-%s,%d,%s-%s-n%s,%s-d%s,%s,%s,%s,%s-L1:%s,%s,%s-PCA%s-%s-%s-i%s' % (dataset,
                                     repr(hidden_dims),
                                     n_inter,
                                     repr(hidden_dims_2),
@@ -80,7 +86,6 @@ param_desc = '%s-%s,%d,%s-%s-n%s,%s-d%s,%s,%s,%s,%s-L1:%s,%s,%s-PCA%s-r%sto%s-%s
                                     repr(a_dropout),
                                     repr(s_l1pen), repr(i_l1pen), repr(a_l1pen),
                                     repr(pca_dims),
-                                    repr(eq_reg_cost), repr(eq_reg_val),
                                     ('C' if center_feats else'') +
                                     ('N' if normalize_feats else '') +
                                     ('W' if train_on_valid else '') +
@@ -189,14 +194,6 @@ class Model(object):
         if a_l1pen != 0:
             a_weights = VariableFilter(bricks=mlp2.linear_transformations, roles=[WEIGHT])(cg)
             cost_reg = cost_reg + a_l1pen * sum(abs(w).sum() for w in a_weights)
-
-        if eq_reg_cost != 0:
-            # add all-to-1 cost
-            if eq_reg_val > 0:
-                eq_reg = (eq_reg_val - abs(inter)) ** 2 
-            else:
-                eq_reg = inter ** (-eq_reg_val)
-            cost_reg = cost_reg + eq_reg_cost * eq_reg.mean()
 
         self.cost = cost
         self.cost_reg = cost_reg

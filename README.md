@@ -21,3 +21,10 @@ complex (deep) architectures are also experimented.
 ## Details
 
 See `doc/README.pdf` for detailed explanations.
+
+## Usefull links
+
+- <https://github.com/Alexis211/transpose_features>
+- <http://web.archive.org/web/20130530054901/http://www.nipsfsc.ecs.soton.ac.uk/results/>
+- <http://clopinet.com/isabelle/Projects/ETH/TM-fextract-class.pdf>
+

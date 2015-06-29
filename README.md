@@ -20,4 +20,4 @@ complex (deep) architectures are also experimented.
 
 ## Details
 
-See `doc/README.pdf` (soon) for detailed explanations.
+See `doc/README.pdf` for detailed explanations.

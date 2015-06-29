@@ -2,7 +2,7 @@
 
 **Idea:** Trying to get the maximum from datasets where we have very few
 training examples, but each example has a very large number of features.
-ExampleTanh of such datasets include medical databases where we have gene
+Examples of such datasets include medical databases where we have gene
 activation measurements for very few patients but many different genes.
 
 **Method:** We design a neural network architecture whose number of parameters
